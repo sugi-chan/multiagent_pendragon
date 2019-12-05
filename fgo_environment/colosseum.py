@@ -369,16 +369,6 @@ class Battle:
             self.win = 0
             self.loss = 0
 
-        #epsilon increase overtime starts at 85 for more exploration
-        #if self.game==20000:
-        #    self.player._epsilon =.9
-        #if self.game==40000:
-        #    self.player._epsilon =.95
-        #if self.game==80000:
-        #     self.player._epsilon =.97
-        #if self.game==100000:
-        #    self.player._epsilon =.99
-        #                      
     def reset_battle(self):
 
         
