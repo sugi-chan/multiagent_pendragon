@@ -224,7 +224,7 @@ class DQNLearner():
         self._learning_rate = _learning_rate
         self._discount = _discount
         self._epsilon = _epsilon
-        self.len_feature_vec = 16
+        self.len_feature_vec = 5+9
 
         # Create Model
         # as of 9/17 best model is the 5-64-128 layer mlp. 

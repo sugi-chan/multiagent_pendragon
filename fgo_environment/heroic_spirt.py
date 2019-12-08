@@ -144,6 +144,20 @@ class HeroicSpirit():
                        'duration':1}
         return output_dict
 
+    def invalid_steps(self, preds):
+        sk1_used = self.used_skill_1
+        sk2_used = self.used_skill_2
+        sk3_used = self.used_skill_3
+
+        new_pred_min = np.min(preds[0])-1
+        for _index in range(len(self.action_dict)):
+            if 'sk1' in self.action_dict[_index] and sk1_used == 1:
+                preds[0][_index] = new_pred_min
+            if 'sk2' in self.action_dict[_index] and sk2_used == 1:
+                preds[0][_index] = new_pred_min
+            if 'sk3' in self.action_dict[_index] and sk3_used == 1:
+                preds[0][_index] = new_pred_min
+
     def get_random_action(self,random_pass = 1):
         action_dict_copy = copy.deepcopy(self.action_dict )
         if self.used_skill_1 == 1:
@@ -153,7 +167,7 @@ class HeroicSpirit():
         if self.used_skill_3 == 1:
             del action_dict_copy[3]
 
-        random_pass_list = [(0,('pass', 'pass'))*(int(random_pass * len(self.action_dict)))]
+        random_pass_list = [(0, ('pass', 'pass'))*(int(random_pass * len(self.action_dict)))]
         return random.choice(list(action_dict_copy.items())+random_pass_list)
 
     def get_action(self, state):
@@ -161,7 +175,9 @@ class HeroicSpirit():
         game_state_array = np.reshape(np.asarray(state), (1, self.feature_vector_len))
 
         preds = self._model.predict(game_state_array, batch_size=1)
-
+        #print(preds)
+        self.invalid_steps(preds)
+        #print(preds)
         predicted_classs = np.argmax(preds)
 
         # Exploration vs Exploitation!
@@ -197,6 +213,7 @@ class HeroicSpirit():
             # In this version I call predict again... could just use self._last_target... *shrug
             outfit_state_array = np.reshape(np.asarray(state), (1, self.feature_vector_len))
             preds = self._model.predict([outfit_state_array], batch_size=1)
+            self.invalid_steps(preds)
             maxQ = np.amax(preds)
             new = self._discount * maxQ #discount is applied bc it is a future action??? idk.. is standard?
 
@@ -206,8 +223,10 @@ class HeroicSpirit():
 
             # at every update we are doing are training on a single batch of size 1
             self._model.fit(self._last_state, self._last_target, batch_size=1, epochs=1, verbose=0)
+    
+    def save_rl_model(self,model_name):
 
-
+        self._model.save(str(model_name)+'.h5')
 
 class JAlter(HeroicSpirit):
 
