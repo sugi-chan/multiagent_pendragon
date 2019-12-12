@@ -117,3 +117,5 @@ spark-warehouse/
 datasets/
 model_files/
 notebook/scratch/datasets/
+fgo_environment/models
+
