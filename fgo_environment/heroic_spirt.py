@@ -1,8 +1,27 @@
+# extra imports to set GPU options
+import tensorflow as tf
+from keras import backend as k
+ 
+###################################
+# TensorFlow wizardry
+config = tf.ConfigProto()
+ 
+# Don't pre-allocate memory; allocate as-needed
+config.gpu_options.allow_growth = True
+ 
+# Only allow a total of half the GPU memory to be allocated
+config.gpu_options.per_process_gpu_memory_fraction = 0.2
+ 
+# Create a session with the above options specified.
+k.tensorflow_backend.set_session(tf.Session(config=config))
+
+
 import random
 import copy
 from keras.models import Sequential
 from keras.layers.core import Dense, Activation
 from keras.optimizers import RMSprop,Adam
+from keras.layers import LeakyReLU
 import numpy as np
 import pandas as pd
 #from colosseum import team_chaldela
@@ -92,17 +111,21 @@ class HeroicSpirit():
                             1: ('sk1', self.skill_1()),
                             2: ('sk2', self.skill_2()),
                             3: ('sk3', self.skill_3())}
+        self.initial_lr = 0.001
 
         model = Sequential()
 
-        model.add(Dense(128, init='glorot_normal', activation = 'relu', input_dim=self.feature_vector_len))
-
-        model.add(Dense(128, init='glorot_normal', activation = 'relu'))
-        model.add(Dense(64, init='glorot_normal', activation = 'relu'))
-        model.add(Dense(32, init='glorot_normal', activation = 'relu'))
+        model.add(Dense(256, init='glorot_normal', input_dim=self.feature_vector_len))#activation = 'relu', input_dim=self.feature_vector_len))
+        model.add(LeakyReLU(alpha=0.01))
+        model.add(Dense(256, init='glorot_normal'))#$, activation = 'relu'))
+        model.add(LeakyReLU(alpha=0.01))
+        model.add(Dense(128, init='glorot_normal'))#, activation = 'relu'))
+        model.add(LeakyReLU(alpha=0.01))
+        model.add(Dense(64, init='glorot_normal'))#, activation = 'relu'))
+        model.add(LeakyReLU(alpha=0.01))
 
         model.add(Dense(len(self.action_dict), init='glorot_normal',activation='linear'))
-        opt = RMSprop()
+        opt = Adam(learning_rate=self.initial_lr)
         model.compile(loss='mse', optimizer=opt)
 
         self._model = model
@@ -158,7 +181,7 @@ class HeroicSpirit():
             if 'sk3' in self.action_dict[_index] and sk3_used == 1:
                 preds[0][_index] = new_pred_min
 
-    def get_random_action(self,random_pass = 1):
+    def get_random_action(self,random_pass = 2):
         action_dict_copy = copy.deepcopy(self.action_dict )
         if self.used_skill_1 == 1:
             del action_dict_copy[1]
@@ -167,7 +190,11 @@ class HeroicSpirit():
         if self.used_skill_3 == 1:
             del action_dict_copy[3]
 
-        random_pass_list = [(0, ('pass', 'pass'))*(int(random_pass * len(self.action_dict)))]
+        random_pass_list = []
+        if random_pass >0:
+            for i in range(int(random_pass*len(self.action_dict))):
+                random_pass_list.append((0, ('pass', 'pass')))
+
         return random.choice(list(action_dict_copy.items())+random_pass_list)
 
     def get_action(self, state):
@@ -188,7 +215,13 @@ class HeroicSpirit():
         # When the random number is greater than the epsilon value we randomly select an action
         # and we see how it goes!
         else:
-            random_action_key_value = self.get_random_action()
+            if state[0] ==0:
+                random_pass_number = 1
+            if state[0] ==1:
+                random_pass_number = .5
+            if state[0] ==2:
+                random_pass_number = 0
+            random_action_key_value = self.get_random_action(random_pass=random_pass_number)
             predicted_classs = random_action_key_value[0]
             action = random_action_key_value[1]
             #action = use_predicted_probability(self.action_dict,predicted_classs)

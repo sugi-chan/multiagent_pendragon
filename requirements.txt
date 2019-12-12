@@ -1,4 +1,4 @@
-tensorflow==1.13.2
+tensorflow-gpu==1.13.2
 pandas
 numpy
 keras

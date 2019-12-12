@@ -1,3 +1,20 @@
+# extra imports to set GPU options
+import tensorflow as tf
+from keras import backend as k
+import pandas as pd
+###################################
+# TensorFlow wizardry
+config = tf.ConfigProto()
+ 
+# Don't pre-allocate memory; allocate as-needed
+config.gpu_options.allow_growth = True
+ 
+# Only allow a total of half the GPU memory to be allocated
+config.gpu_options.per_process_gpu_memory_fraction = 0.3
+ 
+# Create a session with the above options specified.
+k.tensorflow_backend.set_session(tf.Session(config=config))
+
 import numpy as np
 
 from heroic_spirt import HeroicSpirit, Chaldea
@@ -35,7 +52,6 @@ class enemy_servants:
         self.dmg_max = dmg_max
     def deal_damage(self):
         return randint(1, self.dmg_max ) 
-        
 
 '''
 way to shuffle 15 card deck and deal 5 cards.
@@ -519,27 +535,27 @@ def check_active_buffs_for_rewards(skill_dict):
         
         if hero == 'hero1':
             if skill_dict['sk1_'+hero] == 1:
-                hero1_reward_bonus = 2
+                hero1_reward_bonus = 1
             elif skill_dict['sk3_'+hero] == 1:
-                hero1_reward_bonus = 2
+                hero1_reward_bonus = 1
             elif skill_dict['sk3_'+hero] == 1:
-                hero1_reward_bonus = 2
+                hero1_reward_bonus = 1
 
         elif hero == 'hero2':
             if skill_dict['sk1_'+hero] == 1:
-                hero2_reward_bonus = 2
+                hero2_reward_bonus = 1
             elif skill_dict['sk3_'+hero] == 1:
-                hero2_reward_bonus = 2
+                hero2_reward_bonus = 1
             elif skill_dict['sk3_'+hero] == 1:
-                hero2_reward_bonus = 2
+                hero2_reward_bonus = 1
                 
         elif hero == 'hero3':
             if skill_dict['sk1_'+hero] == 1:
-                hero3_reward_bonus = 2
+                hero3_reward_bonus = 1
             elif skill_dict['sk3_'+hero] == 1:
-                hero3_reward_bonus = 2
+                hero3_reward_bonus = 1
             elif skill_dict['sk3_'+hero] == 1:
-                hero3_reward_bonus = 2
+                hero3_reward_bonus = 1
                 
     return hero1_reward_bonus,hero2_reward_bonus,hero3_reward_bonus
 
@@ -565,6 +581,9 @@ class Battle:
         self.game = 1
         self.evaluation = False
         self.og_hitpoints = self.player.hit_points
+        self.result_list = []
+        self.game_count_list = []
+        self.lr_holder = self.player.hero1.initial_lr
         
     def fight_battle(self):
         #print(self.game)
@@ -575,7 +594,7 @@ class Battle:
             if self.evaluation == True:
                 print('')
                 print('#'*50)
-                print('ITS SHOW TIME! game: ',game)
+                print('ITS SHOW TIME! round: ',game)
                 print('#'*50)
                 print('reset enemies')
             if game == 0:
@@ -583,13 +602,14 @@ class Battle:
             if game == 1:
                 enemy_team = enemy_servants(hp=40,dmg_max = 4)
             if game == 2:
-                enemy_team = enemy_servants(hp=60,dmg_max = 6)
+                enemy_team = enemy_servants(hp=50,dmg_max = 5)
             if check_if_alive(player_team) =='alive':
                 while True:
                     round_reward = 0
                     hero1_reward = 0
                     hero2_reward = 0
                     hero3_reward = 0
+                    pass_reward = 0
                     enemy_dps = enemy_team.deal_damage()
 
                     #### PLAYER TURN SECTION
@@ -609,6 +629,19 @@ class Battle:
                     ### GET THOSE ACTIONS! ###
                     # game state
                     # do hero 1 actions and whatever
+                    # calculate pass reward
+                    if turn_counter <= 6:
+                        pass_reward += 1
+                    if turn_counter < 10 and turn_counter > 6:
+                        pass_reward += .5
+                    if game == 0:
+                        pass_reward += 2 
+                    if game == 1:
+                        pass_reward += 1.5 
+                    if game == 2:
+                        pass_reward += -2
+                    #if pass_reward < 0:
+                    #    pass_reward = 0
                     hero1_state = [game]+[turn_counter]+get_buff_game_state(player_team)+get_skill_use_game_state(player_team)
 
                     hero1_action = player_team.hero_dict['hero1'].get_action(hero1_state)
@@ -616,11 +649,11 @@ class Battle:
                     if self.evaluation == True:
                         print('hero1:',hero1_action)
                     if hero1_action[0] != 'pass':
-                        hero1_reward = 1
+                        hero1_reward = .5
                         if game == 1:
-                            hero1_reward +=.5
-                        if game == 2:
                             hero1_reward +=1
+                        if game == 2:
+                            hero1_reward +=1.5
                         apply_buffs(player_team,hero1_action[1])
                         if hero1_action[0] == 'sk1':
                             player_team.hero_dict['hero1'].used_skill_1 = 1
@@ -628,6 +661,9 @@ class Battle:
                             player_team.hero_dict['hero1'].used_skill_2 = 1
                         elif hero1_action[0] == 'sk3':
                             player_team.hero_dict['hero1'].used_skill_3 = 1
+                    if hero1_action[0] == 'pass':
+                        hero1_reward = pass_reward
+
                     if self.evaluation == True:
                         print('game_state 1: game',game,'turn: ',turn_counter,'buffs',get_buff_game_state(player_team), get_skill_use_game_state(player_team))
                     hero2_state = [game]+[turn_counter]+get_buff_game_state(player_team)+get_skill_use_game_state(player_team)
@@ -635,13 +671,14 @@ class Battle:
                     hero2_action = player_team.hero_dict['hero2'].get_action(hero2_state)
                     if self.evaluation == True:
                         print('hero2:',hero2_action)
-
+                    #print(hero2_action)
                     if hero2_action[0] != 'pass':
-                        hero2_reward = 1
+
+                        hero2_reward = .5
                         if game == 1:
-                            hero2_reward +=.5
-                        if game == 2:
                             hero2_reward +=1
+                        if game == 2:
+                            hero2_reward +=1.5
                         apply_buffs(player_team,hero2_action[1])
                         if hero2_action[0] == 'sk1':
                             player_team.hero_dict['hero2'].used_skill_1 = 1
@@ -649,7 +686,9 @@ class Battle:
                             player_team.hero_dict['hero2'].used_skill_2 = 1
                         elif hero2_action[0] == 'sk3':
                             player_team.hero_dict['hero2'].used_skill_3 = 1
-
+                    if hero2_action[0] == 'pass':
+                        hero2_reward = pass_reward
+              
                     if self.evaluation == True:
                         print('game_state 2: game',game,'turn: ',turn_counter,'buffs',get_buff_game_state(player_team), get_skill_use_game_state(player_team))
                     hero3_state = [game]+[turn_counter]+get_buff_game_state(player_team)+get_skill_use_game_state(player_team)
@@ -659,11 +698,11 @@ class Battle:
                         print('hero3:',hero3_action)
 
                     if hero3_action[0] != 'pass':
-                        hero3_reward = 1
+                        hero3_reward = .5
                         if game == 1:
-                            hero3_reward +=.5
-                        if game == 2:
                             hero3_reward +=1
+                        if game == 2:
+                            hero3_reward +=1.5
                         apply_buffs(player_team,hero3_action[1])
                         if hero3_action[0] == 'sk1':
                             player_team.hero_dict['hero3'].used_skill_1 = 1
@@ -671,6 +710,8 @@ class Battle:
                             player_team.hero_dict['hero3'].used_skill_2 = 1
                         elif hero3_action[0] == 'sk3':
                             player_team.hero_dict['hero3'].used_skill_3 = 1
+                    if hero3_action[0] == 'pass':
+                        hero3_reward = pass_reward
                     if self.evaluation == True:
                         print('game_state 3: game',game,'turn: ',turn_counter,'buffs',get_buff_game_state(player_team), get_skill_use_game_state(player_team))
 
@@ -701,6 +742,7 @@ class Battle:
                     picked_cards = pick_cards(current_hand,p1_action) #
                     picked_servants = picked_cards_servants(servant_numbers,p1_action)
                     if self.evaluation == True:
+                        print('current hand: ',current_hand)
                         print('cards to play: ',picked_cards, 'indexes: ', p1_action, 'servants: ',picked_servants)
 
                     team_dps, round_reward = calc_chain_damage(player_team,picked_cards, round_reward, picked_servants)    
@@ -765,6 +807,7 @@ class Battle:
                         break
 
                     if self.evaluation == False:
+                        #print(hero2_reward,hero2_action)
                         player_team.hero_dict['hero1'].update(hero1_state,hero1_reward)
                         player_team.hero_dict['hero2'].update(hero2_state,hero2_reward)
                         player_team.hero_dict['hero3'].update(hero3_state,hero3_reward)
@@ -780,13 +823,38 @@ class Battle:
         team = self.player
         team.hit_points = self.og_hitpoints
         team.hero1.np_charge = 50
-        team.hero1.np_charge = 50
-        team.hero1.np_charge = 50
+        team.hero2.np_charge = 50
+        team.hero3.np_charge = 50
+        # reset skill usage:
+        team.hero1.used_skill_1 = 0
+        team.hero1.used_skill_2 = 0
+        team.hero1.used_skill_3 = 0
+
+        team.hero2.used_skill_1 = 0
+        team.hero2.used_skill_2 = 0
+        team.hero2.used_skill_3 = 0
+
+        team.hero3.used_skill_1 = 0
+        team.hero3.used_skill_2 = 0
+        team.hero3.used_skill_3 = 0
+
+        #active_buffs_dict
+        team.hero1.active_buffs_dict = {}
+        team.hero2.active_buffs_dict = {}
+        team.hero3.active_buffs_dict = {}
+
         team.current_stars = 0
         return team
     
     def report(self,player_team):
         #turned off for plotting 9/18
+        if self.game % 1000 == 0:
+
+            self.game_count_list.append(str(self.game))
+            self.result_list.append(str(self.win / (self.win + self.loss)))
+            df = pd.DataFrame(list(zip(self.game_count_list, self.result_list)), columns =['game_number', 'win_loss'])
+            df.to_csv('models/run_record.csv')
+
         if self.game % self._num_learning_rounds == 0:
             print('##############################################')
             print('#                 Final Score                #')
@@ -798,7 +866,12 @@ class Battle:
 
             self.evaluation = True
             exploration_holder = player_team.hero1._epsilon
-            self.player._epsilon = 1.0
+
+            player_team.hero1._epsilon = 1.0
+            player_team.hero2._epsilon = 1.0
+            player_team.hero3._epsilon = 1.0
+            player_team.hero3._epsilon = 1.0
+            player_team.card_picker._epsilon = 1.0
             print('#################### G1 ######################')
             self.fight_battle()
             print('#################### G2 ######################')
@@ -808,15 +881,17 @@ class Battle:
             # addition that decreases the amount of exploration over time
             # after 150K outfits the rate of exploration gets decreased
             # by .1 every time this eval process is done
-            if self.game > 100000:
+            if self.game > 20000:
                 if exploration_holder < .9:
-                    exploration_holder += .1
+                    exploration_holder += .3
                 if exploration_holder >= .9:
                     exploration_holder = .9
+
 
             player_team.hero1._epsilon = exploration_holder
             player_team.hero2._epsilon = exploration_holder
             player_team.hero3._epsilon = exploration_holder
+            player_team.card_picker._epsilon = .9
 
             self.evaluation = False
             
@@ -826,6 +901,8 @@ class Battle:
             player_team.hero1.save_rl_model('models/{}_iteration_{}'.format(player_team.hero1.name,self.game))
             player_team.hero2.save_rl_model('models/{}_iteration_{}'.format(player_team.hero1.name,self.game))
             player_team.hero3.save_rl_model('models/{}_iteration_{}'.format(player_team.hero1.name,self.game))
+
+            
             #self.player.save_rl_model('models/{}_iteration_{}'.format(rl_model_name,self.game))
             
         elif self.game % self._report_every == 0:
@@ -835,35 +912,55 @@ class Battle:
             print('')
             print(str(self.game) +","  +str(self.win / (self.win + self.loss)))
             print('')
+            print('lr holder',self.lr_holder)
+            print('')
             print('##############################################')
 
             self.evaluation = True
             exploration_holder = player_team.hero1._epsilon
-            self.player._epsilon = 1.0
+            player_team.hero1._epsilon = 1.0
+            player_team.hero2._epsilon = 1.0
+            player_team.hero3._epsilon = 1.0
+            player_team.hero3._epsilon = 1.0
+            player_team.card_picker._epsilon = 1.0
             print('#################### G1 ######################')
             self.fight_battle()
             print('#################### G2 ######################')
             self.fight_battle()
             print('#################### G3 ######################')
             self.fight_battle()
+            print('##############################################')
+            print('#                 Final Score                #')
+            print('##############################################')
+            print('')
+            print(str(self.game) +","  +str(self.win / (self.win + self.loss)))
+            print('')
+            print('##############################################')
             # addition that decreases the amount of exploration over time
             # after 150K outfits the rate of exploration gets decreased
             # by .1 every time this eval process is done
-            if self.game > 100000:
+            
+            if self.game > 20000:
                 if exploration_holder < .9:
-                    exploration_holder += .1
+                    exploration_holder += .3
                 if exploration_holder >= .9:
                     exploration_holder = .9
+                self.lr_holder = self.lr_holder *.1
+                k.set_value(player_team.hero1._model.optimizer.lr, self.lr_holder)
+                k.set_value(player_team.hero2._model.optimizer.lr, self.lr_holder)
+                k.set_value(player_team.hero3._model.optimizer.lr, self.lr_holder)
 
             player_team.hero1._epsilon = exploration_holder
             player_team.hero2._epsilon = exploration_holder
             player_team.hero3._epsilon = exploration_holder
+            player_team.card_picker._epsilon = .9
 
             self.evaluation = False
             
             self.win = 0
             self.loss = 0
-            if self.game % 50000 == 0:
+
+            if self.game % 10000 == 0:
                 player_team.card_picker.save_rl_model('models/{}_iteration_{}'.format(rl_model_name,self.game))
                 player_team.hero1.save_rl_model('models/{}_iteration_{}'.format(player_team.hero1.name,self.game))
                 player_team.hero2.save_rl_model('models/{}_iteration_{}'.format(player_team.hero2.name,self.game))
