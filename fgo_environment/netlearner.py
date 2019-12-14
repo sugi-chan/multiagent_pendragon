@@ -213,6 +213,14 @@ def convert_card_list(card_list_input):
     return out_array2
 '''
 
+# keras example imports
+from keras.models import load_model
+ 
+#
+#D:/datasets/datascience/hack_week/m_m/dobby/outfit_rl
+# load model
+model = load_model('D:/projects/multiagent_pendragon_dev_2/fgo_environment/models/run2_good_run/new_chaldea_card_model_12_7_19_iteration_40000.h5')
+#rl_model_name = 'v8_judge_only_400K'
 class DQNLearner():
     def __init__(self,
                  _learning=True,
@@ -223,7 +231,7 @@ class DQNLearner():
         self._learning = _learning
         self._learning_rate = _learning_rate
         self._discount = _discount
-        self._epsilon = _epsilon
+        self._epsilon = 1.0 #ADJUSTED _epsilon
         self.len_feature_vec = 5+9
 
         # Create Model
@@ -245,6 +253,10 @@ class DQNLearner():
 
         opt = RMSprop()
         model.compile(loss='mse', optimizer=opt)
+
+        #added in for testing
+        model = load_model('D:/projects/multiagent_pendragon_dev_2/fgo_environment/models/run2_good_run/new_chaldea_card_model_12_7_19_iteration_40000.h5')
+
 
         self._model = model
 

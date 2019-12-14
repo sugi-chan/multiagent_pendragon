@@ -22,7 +22,7 @@ import time
 
 
 def main():
-    num_learning_rounds = 70000
+    num_learning_rounds = 25000
     game = Battle(num_learning_rounds = num_learning_rounds) #Deep Q Network Learner
     #game = Game(num_learning_rounds, Learner()) #Q learner
     number_of_test_rounds = 1000
