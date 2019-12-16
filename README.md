@@ -1,5 +1,5 @@
 <p align="center">
-  <img width="640" height="400" src="https://cdn-images-1.medium.com/max/1200/1*OW5YsC_XyyBn6bakstvxaA.jpeg">
+  <img src="https://i.imgur.com/kasQyPl.png">
 </p>
 
 # Multi-Agent Pendragon
