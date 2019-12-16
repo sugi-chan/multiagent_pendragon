@@ -38,3 +38,7 @@ I built in my first bot [project pendragon](https://github.com/sugi-chan/project
 
 - add more documentation on how to do things like setup a `battle plan`.
 
+- need a `requirements.txt`
+
+- docker container?
+
