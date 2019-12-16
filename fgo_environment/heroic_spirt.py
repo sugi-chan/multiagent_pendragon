@@ -18,10 +18,13 @@ k.tensorflow_backend.set_session(tf.Session(config=config))
 
 import random
 import copy
+import keras
 from keras.models import Sequential
 from keras.layers.core import Dense, Activation
-from keras.optimizers import RMSprop,Adam
+from keras.optimizers import RMSprop,Adam,SGD
 from keras.layers import LeakyReLU
+from keras.layers import Dropout
+
 import numpy as np
 import pandas as pd
 #from colosseum import team_chaldela
@@ -29,16 +32,27 @@ import itertools
 from random import choice
 from keras.models import load_model
 
-from utils import use_predicted_probability, convert_card_list
-from netlearner import DQNLearner
+from fgo_environment.utils import use_predicted_probability, convert_card_list
+from fgo_environment.netlearner import DQNLearner
 
+def softmax(X):
+    expo = np.exp(X)
+    expo_sum = np.sum(np.exp(X))
+    return expo/expo_sum
+'''
+CHALDEA.hero1._model = load_model('D:/projects/multiagent_pendragon_dev_2/fgo_environment/models/run6_good_run_8K/jalter_iteration_8000.h5')
+CHALDEA.hero2._model = load_model('D:/projects/multiagent_pendragon_dev_2/fgo_environment/models/run6_good_run_8K/Ishtar_iteration_8000.h5')
+CHALDEA.hero3._model = load_model('D:/projects/multiagent_pendragon_dev_2/fgo_environment/models/run6_good_run_8K/artoria_pendragon_iteration_8000.h5')
+
+
+'''
 class Chaldea():
     def __init__(self,
                  hero_list = None
                  ):
         super().__init__()
         self._learning = True
-        self._epsilon = .3
+        self._epsilon = 1.0
         if hero_list is None:
             self.hero1 = JAlter(health=10,NP=50,spot='hero1',_epsilon=self._epsilon)
             self.hero2 = Ishtar(health=10,NP=50,spot='hero2',_epsilon=self._epsilon)
@@ -80,7 +94,7 @@ class HeroicSpirit():
         self.spot = spot
         self._epsilon = _epsilon
         self._discount = .1
-        self.feature_vector_len = 2+9+9
+        self.feature_vector_len = 2+9+9#1+9+9#
         self._learning = True
 
         if deck is None:
@@ -111,22 +125,29 @@ class HeroicSpirit():
                             1: ('sk1', self.skill_1()),
                             2: ('sk2', self.skill_2()),
                             3: ('sk3', self.skill_3())}
-        self.initial_lr = 0.001
-
+        self.initial_lr = 0.00001
+        self.class_weight = {0: 1.0,
+                1: 5.0,
+                2: 5.0,
+                3: 5.0}
         model = Sequential()
 
-        model.add(Dense(256, init='glorot_normal', input_dim=self.feature_vector_len))#activation = 'relu', input_dim=self.feature_vector_len))
-        model.add(LeakyReLU(alpha=0.01))
-        model.add(Dense(256, init='glorot_normal'))#$, activation = 'relu'))
-        model.add(LeakyReLU(alpha=0.01))
-        model.add(Dense(128, init='glorot_normal'))#, activation = 'relu'))
-        model.add(LeakyReLU(alpha=0.01))
-        model.add(Dense(64, init='glorot_normal'))#, activation = 'relu'))
-        model.add(LeakyReLU(alpha=0.01))
+        model.add(Dense(64, init='glorot_normal', input_dim=self.feature_vector_len,kernel_regularizer=keras.regularizers.l2(l=0.02)))#activation = 'relu', input_dim=self.feature_vector_len))
+        model.add(Dropout(0.4))
+        model.add(LeakyReLU(alpha=0.03))
+        model.add(Dense(32, init='glorot_normal',kernel_regularizer=keras.regularizers.l2(l=0.02)))#$, activation = 'relu'))
+        model.add(Dropout(0.4))
+        model.add(LeakyReLU(alpha=0.03))
+        #model.add(Dense(64, init='glorot_normal',kernel_regularizer=keras.regularizers.l2(l=0.02)))#, activation = 'relu'))
+        #model.add(Dropout(0.5))
+        #model.add(LeakyReLU(alpha=0.03))
+        #model.add(Dense(64, init='glorot_normal',kernel_regularizer=keras.regularizers.l2(l=0.2)))#, activation = 'relu'))
+        #model.add(LeakyReLU(alpha=0.01))
 
         model.add(Dense(len(self.action_dict), init='glorot_normal',activation='linear'))
-        opt = Adam(learning_rate=self.initial_lr)
-        model.compile(loss='mse', optimizer=opt)
+        opt = SGD(lr=self.initial_lr, momentum=0.9, clipnorm=2.0)
+        #opt = Adam(learning_rate=self.initial_lr)
+        model.compile(loss='binary_crossentropy', optimizer=opt)
 
         self._model = model
 
@@ -172,7 +193,7 @@ class HeroicSpirit():
         sk2_used = self.used_skill_2
         sk3_used = self.used_skill_3
 
-        new_pred_min = np.min(preds[0])-1
+        new_pred_min = np.min(preds[0])-.5 #with softmax everything is just probabilities
         for _index in range(len(self.action_dict)):
             if 'sk1' in self.action_dict[_index] and sk1_used == 1:
                 preds[0][_index] = new_pred_min
@@ -201,39 +222,39 @@ class HeroicSpirit():
         # Take in game state and get a prediction
         game_state_array = np.reshape(np.asarray(state), (1, self.feature_vector_len))
 
-        preds = self._model.predict(game_state_array, batch_size=1)
+        preds = self._model.predict(game_state_array,batch_size=1)
         #print(preds)
         self.invalid_steps(preds)
         #print(preds)
-        predicted_classs = np.argmax(preds)
+        predicted_class = np.argmax(preds)
 
         # Exploration vs Exploitation!
         # if the randomly generated value is less than the epsilon value
         # we go down the Exploitation route... (I might have defined this backwards from normal...)
         if np.random.uniform(0, 1) < self._epsilon:
-            action = use_predicted_probability(self.action_dict, predicted_classs)
+            action = use_predicted_probability(self.action_dict, predicted_class)
         # When the random number is greater than the epsilon value we randomly select an action
         # and we see how it goes!
         else:
-            if state[0] ==0:
+            if state[0] ==1/3:
                 random_pass_number = 1
-            if state[0] ==1:
+            if state[0] ==2/3:
                 random_pass_number = .5
-            if state[0] ==2:
+            if state[0] ==3/3:
                 random_pass_number = 0
             random_action_key_value = self.get_random_action(random_pass=random_pass_number)
-            predicted_classs = random_action_key_value[0]
+            predicted_class = random_action_key_value[0]
             action = random_action_key_value[1]
             #action = use_predicted_probability(self.action_dict,predicted_classs)
 
         # store some stuff for later
         self._last_state = game_state_array
-        self._last_action = predicted_classs
+        self._last_action = predicted_class
         self._last_target = preds
 
-        return action
+        return action,predicted_class, preds 
 
-    def update(self, state, reward):
+    def update(self, state, preds,predicted_class, reward):
         '''
         reward:
                 reward genearted from the game envionment
@@ -244,18 +265,20 @@ class HeroicSpirit():
         '''
         if self._learning:
             # In this version I call predict again... could just use self._last_target... *shrug
-            outfit_state_array = np.reshape(np.asarray(state), (1, self.feature_vector_len))
-            preds = self._model.predict([outfit_state_array], batch_size=1)
-            self.invalid_steps(preds)
+            game_state_array = np.reshape(np.asarray(state), (1, self.feature_vector_len))
+            #preds = self._model.predict([outfit_state_array], batch_size=1)
+            #self.invalid_steps(preds)
             maxQ = np.amax(preds)
-            new = self._discount * maxQ #discount is applied bc it is a future action??? idk.. is standard?
+            #new = self._discount * maxQ #discount is applied bc it is a future action??? idk.. is standard?
 
-            combined_reward = reward + new
+            combined_reward = reward + maxQ
 
-            self._last_target[0][self._last_action] = combined_reward
+            preds[0][predicted_class] = combined_reward
+            softmaxed_adjusted_preds = softmax(preds)
+            #print(preds,combined_reward,softmaxed_adjusted_preds)
 
             # at every update we are doing are training on a single batch of size 1
-            self._model.fit(self._last_state, self._last_target, batch_size=1, epochs=1, verbose=0)
+            self._model.fit(game_state_array, softmaxed_adjusted_preds, batch_size=1, epochs=1, verbose=0,class_weight=self.class_weight)
     
     def save_rl_model(self,model_name):
 
@@ -272,6 +295,8 @@ class JAlter(HeroicSpirit):
                  deck=None,
                  _epsilon=.3):
         super().__init__(name, health, NP, NP_damage, spot)
+
+        self._model = load_model('D:/projects/multiagent_pendragon_dev_2/fgo_environment/models/run6_good_run_8K/jalter_iteration_9000.h5')
 
     def skill_1(self): #should be a crit boost but unsure how to do that atm??
         #print('skill_1')
@@ -323,6 +348,8 @@ class Ishtar(HeroicSpirit):
                  _epsilon=.3):
         super().__init__(name, health, NP, NP_damage,spot)
 
+        self.model = load_model('D:/projects/multiagent_pendragon_dev_2/fgo_environment/models/run6_good_run_8K/jalter_iteration_9000.h5')
+
     def skill_1(self): #should be a crit boost but unsure how to do that atm??
         #print('skill_1')
         output_dict = {'name': 'sk1_'+self.spot+'_'+self.name+'_manifestation_of_beauty',
@@ -372,7 +399,7 @@ class ArtoriaSaber(HeroicSpirit):
                  deck=None,
                  _epsilon=.3):
         super().__init__(name, health, NP, NP_damage,spot)
-
+        self.model = load_model('D:/projects/multiagent_pendragon_dev_2/fgo_environment/models/run6_good_run_8K/artoria_pendragon_iteration_9000.h5')
     def skill_1(self): #should be a crit boost but unsure how to do that atm??
         #print('skill_1')
         output_dict = {'name': 'sk1_'+self.spot+'_'+self.name+'_charisma_B',

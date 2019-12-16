@@ -21,16 +21,18 @@ import pyautogui
 from keras.models import load_model
 
 from reinforcement_model_helper import convert_card_list, use_predicted_probability
+# grab_screen_fgo is location of FGO itself
+#need to define, card location, attack button location, turn counter location, which are all subsets of the screen_fgo function 
 
-
+# screen crop location is 
 imsize = 224
 
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
-loader = transforms.Compose([transforms.Resize(imsize),
-	transforms.CenterCrop(imsize), 
+loader = transforms.Compose([transforms.Resize((imsize,imsize)),
+	#transforms.CenterCrop(imsize), 
 	transforms.ToTensor(),
 	transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
 
@@ -39,40 +41,62 @@ scale=transforms.Compose([transforms.Resize((224,224)),
 							transforms.ToTensor()
 							 ])
 
+CARD_RESNET = models.resnet50(pretrained=False)
+num_ftrs = CARD_RESNET.fc.in_features
+CARD_RESNET.fc = nn.Linear(num_ftrs, 3)
+CARD_RESNET = CARD_RESNET.to(device)
+CARD_RESNET.load_state_dict(torch.load('models/card_resnet50.pth'))
+CARD_RESNET.eval()
+
+ATTACK_MODEL = models.resnet34(pretrained=True)
+num_ftrs = ATTACK_MODEL.fc.in_features
+ATTACK_MODEL.fc = nn.Linear(num_ftrs, 2)
+ATTACK_MODEL = ATTACK_MODEL.to(device)
+ATTACK_MODEL.load_state_dict(torch.load('models/attack_resnet34.pth'))
+ATTACK_MODEL = ATTACK_MODEL.eval()
+
+
+TURN_RESNET = models.resnet50(pretrained=False)
+num_ftrs = TURN_RESNET.fc.in_features
+TURN_RESNET.fc = nn.Linear(num_ftrs, 3)
+TURN_RESNET = TURN_RESNET.to(device)
+TURN_RESNET.load_state_dict(torch.load('models/turncounter_resnet50.pth'))
+TURN_RESNET = TURN_RESNET.eval()
+## each of the card slots should be in a lookup
 def get_card_raw(card_slot, raw_image):
 	if card_slot == 1:
-		sliced = raw_image[255:380, 68:157]
+		sliced = raw_image[205:310, 27:109]
 		#cv2.imshow("cropped", sliced)
-		cv2.waitKey(0)
+		#cv2.waitKey(0)
 
 	elif card_slot == 2:
-		sliced = raw_image[255:380, 215:295]
+		sliced = raw_image[205:310, 156:240]
 		#cv2.imshow("cropped", sliced)
 		#cv2.waitKey(0)
 
 	elif card_slot == 3:
-		sliced = raw_image[255:380, 355:440]
+		sliced = raw_image[205:310, 287:370]
 		#cv2.imshow("cropped", sliced)
 		#cv2.waitKey(0)
 
 	elif card_slot == 4:
-		sliced = raw_image[255:380, 500:590]
+		sliced = raw_image[205:310, 415:500]
 		#cv2.imshow("cropped", sliced)
 		#cv2.waitKey(0)
 
 	elif card_slot == 5:
-		sliced = raw_image[255:380, 645:735]
+		sliced = raw_image[205:310, 545:634]
 		#cv2.imshow("cropped", sliced)
 		#cv2.waitKey(0)
 
-	elif card_slot == "NP1":
-		sliced = raw_image[89:200, 232:313]
+	#elif card_slot == "NP1":
+	#	sliced = raw_image[89:200, 232:313]
 
-	elif card_slot == "NP2":
-		sliced = raw_image[89:200, 362:444]
+	#elif card_slot == "NP2":
+	#	sliced = raw_image[89:200, 362:444]
 
-	elif card_slot == "NP3":
-		sliced = raw_image[89:200, 494:571]
+	#elif card_slot == "NP3":
+	#	sliced = raw_image[89:200, 494:571]
 
 	return sliced
 
@@ -88,17 +112,11 @@ def image_loader(image_name):
 def get_predicted_class(image_array):
 	labels = { 0:'arts', 1:'buster',2:'quick'}
 	#load model architecture
-	card_resnet = models.resnet50(pretrained=False)
-	num_ftrs = card_resnet.fc.in_features
-	card_resnet.fc = nn.Linear(num_ftrs, 3)
-	card_resnet = card_resnet.to(device)
-	card_resnet.load_state_dict(torch.load('models/card_resnet50.pth'))
-	card_resnet.eval()
+	
 
 	image = image_loader(image_array)
-	y_pred = card_resnet(image)
+	y_pred = CARD_RESNET(image)
 	label_out = labels[y_pred.cpu().data.numpy().argmax()]
-	del card_resnet
 	return label_out, y_pred
 
 
@@ -107,37 +125,37 @@ def click_location(loc_name):
 	sleep_time_ = .01
 	if loc_name == 'NP1':
 		time.sleep(sleep_time_)
-		pyautogui.moveTo(985, 494)
+		pyautogui.moveTo(998,492)
 		pyautogui.click()
-	elif loc_name == 'NP2':
+	if loc_name == 'NP2':
 		time.sleep(sleep_time_)
-		pyautogui.moveTo(1112, 494)
+		pyautogui.moveTo(1105,492)
 		pyautogui.click()
-	elif loc_name == 'NP3':
+	if loc_name == 'NP3':
 		time.sleep(sleep_time_)
-		pyautogui.moveTo(1243, 494)
+		pyautogui.moveTo(1220,492)
 		pyautogui.click()
 
 
 	if loc_name == 'c1':
 		time.sleep(sleep_time_)
-		pyautogui.moveTo(826, 660)
+		pyautogui.moveTo(844, 642)
 		pyautogui.click()
 	if loc_name == 'c2':
 		time.sleep(sleep_time_)
-		pyautogui.moveTo(972, 660)
+		pyautogui.moveTo(978, 642)
 		pyautogui.click()
 	if loc_name == 'c3':
 		time.sleep(sleep_time_)
-		pyautogui.moveTo(1114, 660)
+		pyautogui.moveTo(1108, 642)
 		pyautogui.click()
 	if loc_name == 'c4':
 		time.sleep(sleep_time_)
-		pyautogui.moveTo(1259, 660)
+		pyautogui.moveTo(1235, 642)
 		pyautogui.click()
 	if loc_name == 'c5':
 		time.sleep(sleep_time_)
-		pyautogui.moveTo(1400, 660)
+		pyautogui.moveTo(1367, 642)
 		pyautogui.click()
 
 def check_for_chain(card_type,card_list):
@@ -171,7 +189,7 @@ def brave_chain_checker(base_card,raw_card_list):
 def grab_screen_fgo():
 	#goes through picking cards for brave, buster, arts, quick chains
 
-	screen = grab_screen(region=(700,330,1471,830)) #x1,y1 x2,y2
+	screen = grab_screen(region=(717,379,1486,742)) #need to make this easier 
 	screen = cv2.cvtColor(screen, cv2.COLOR_BGR2RGB)
 	return screen
 
@@ -186,7 +204,7 @@ def get_cards(screen):
 		brave_chain_raw_img_list.append(brave_cards)
 		pred_class ,raw_pred= get_predicted_class(raw_card)
 		card_list.append(pred_class)
-
+		#print(card_list)
 	return card_list, brave_chain_raw_img_list
 
 
@@ -255,6 +273,7 @@ def pick_cards_from_card_list(card_list):
 			click_location('c5')
 
 def rl_bot_card_choice(card_list):
+	'''
 	arts = check_for_chain('arts',card_list)
 	buster = check_for_chain('buster',card_list)
 	quick = check_for_chain('quick',card_list)
@@ -262,22 +281,20 @@ def rl_bot_card_choice(card_list):
 		card_indices = arts[:3]
 	elif len(buster) >= 3:
 		card_indices = buster[:3]
-	elif len(quick) >= 3:
-		card_indices = quick[:3]
+	#elif len(quick) >= 3:
+		#card_indices = quick[:3]
 	else: 
-		
-		rl_model = load_model('models/9_18_run_3_iteration_50000.h5')
-		print('rl card: ',card_list)
-		processed_card_list = convert_card_list(card_list)
-		print('processed rl card: ',processed_card_list)
-		predicted_array = rl_model.predict(processed_card_list, batch_size=1)
-
-		predicted_classs = np.argmax(predicted_array)
-		print('pred class: ',predicted_classs)
-
-		card_indices = use_predicted_probability(predicted_classs)
-		print(card_indices)
-		del rl_model
+	'''
+	rl_model = load_model('models/9_18_run_3_iteration_50000.h5')
+	print('rl card: ',card_list)
+	processed_card_list = convert_card_list(card_list)
+	print('processed rl card: ',processed_card_list)
+	predicted_array = rl_model.predict(processed_card_list, batch_size=1)
+	predicted_classs = np.argmax(predicted_array)
+	print('pred class: ',predicted_classs)
+	card_indices = use_predicted_probability(predicted_classs)
+	print(card_indices)
+	del rl_model
 	for card_index in card_indices:
 		if card_index == 0:
 			click_location('c1')
@@ -295,24 +312,35 @@ def rl_bot_card_choice(card_list):
 def detect_start_turn():
 	#630, 327 xy 730 415
 
-	attack_model = models.resnet18(pretrained=True)
-	num_ftrs = attack_model.fc.in_features
-	attack_model.fc = nn.Linear(num_ftrs, 2)
-	attack_model = attack_model.to(device)
-	attack_model.load_state_dict(torch.load('models/attack_resnet18.pth'))
-	attack_model.eval()
+	
 
 	labels = { 0:'attack', 1:'not_attack'}
 	screen = grab_screen_fgo()
 
-	attack_button = screen[327:415, 630:730] #x1,y1 x2,y2
+	attack_button = screen[261:349, 582:687] #x1,y1 x2,y2
 	attack_button = cv2.cvtColor(attack_button, cv2.COLOR_BGR2RGB)
 
 	image = image_loader(attack_button)
-	y_pred = attack_model(image)
+	y_pred = ATTACK_MODEL(image)
 
 	label_out = labels[y_pred.cpu().data.numpy().argmax()]
 
-	del attack_model
 	return label_out == 'attack'
+
+def detect_round_counter():
+	labels = {0:'one', 1:'three',2: 'two'}
+
+	
+
+
+	screen = grab_screen_fgo()
+	sliced = image_loader(screen[6:22, 495:506]) #x1 = 1210 y1 = 383 x2 = 1224 y2= 398
+
+	y_pred = TURN_RESNET(sliced)
+	label_out = labels[y_pred.cpu().data.numpy().argmax()]
+
+	#del turn_resnet
+	
+	return label_out
+
 

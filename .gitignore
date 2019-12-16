@@ -118,4 +118,6 @@ datasets/
 model_files/
 notebook/scratch/datasets/
 fgo_environment/models
-
+fgo_environment/models2
+plans/
+models/
