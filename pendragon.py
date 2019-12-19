@@ -139,7 +139,7 @@ def main(skill_usage_list):
                         pyautogui.click()
                         time.sleep(sleep_seconds)
                     skill_usage_num+=1
-                    if round_int > 1:
+                    if round_int > 0 or turn_counter >7:
                         click_location("NP2")
                         click_location("NP3")
                         click_location("NP1")
@@ -152,7 +152,7 @@ def main(skill_usage_list):
                     time.sleep(2.0)
 
                     if np_barrage is True:
-                        if round_int > 1:
+                        if round_int > 0 or turn_counter >7:
                             click_location("NP2")
                             click_location("NP3")
                             click_location("NP1")

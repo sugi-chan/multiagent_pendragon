@@ -560,63 +560,6 @@ def check_active_buffs_for_rewards(skill_dict):
                 
     return hero1_reward_bonus,hero2_reward_bonus,hero3_reward_bonus
 
-def process_rewards_get_finalized_preds(preds_list2,action_list_actions,reward_list,hero_action_dict):
-    def invalid_steps_game_eval(preds,sk1,sk2,sk3,hero_action_dict):
-        sk1_used = sk1
-        sk2_used = sk2
-        sk3_used = sk3
-        #print(preds)
-        new_pred_min = 0 #with softmax everything is just probabilities
-        for _index in range(4):
-            #print(_index)
-            if 'sk1' in hero_action_dict[_index] and sk1_used == 1:
-                preds[0][_index] = new_pred_min
-            if 'sk2' in hero_action_dict[_index] and sk2_used == 1:
-                #print(preds[0][_index])
-                preds[0][_index] = new_pred_min
-            if 'sk3' in hero_action_dict[_index] and sk3_used == 1:
-                preds[0][_index] = new_pred_min
-
-    used_skill_1 = 0
-    used_skill_2 = 0
-    used_skill_3 = 0
-
-    for i in range(len(action_list_actions)):
-
-        reward = reward_list[i]
-        action_number = action_list_actions[i]
-        #print(reward,action_number)
-        if reward >=0:
-            group_reward_mod = -reward
-        else:
-            group_reward_mod = abs(reward)
-        preds_list2[i][0][action_number] = preds_list2[i][0][action_number]+ reward
-
-        #modify all the other ones up or down
-        action_list = copy.deepcopy(list(hero_action_dict.keys()))
-        if action_number in action_list: action_list.remove(action_number)
-        for action in action_list:
-            preds_list2[i][0][action] = preds_list2[i][0][action] + group_reward_mod
-
-        nonzero_idxs = np.where(preds_list2[i][0] > 1)[0]
-        preds_list2[i][0][nonzero_idxs] = 1
-
-        nonzero_idxs = np.where(preds_list2[i][0] < 0)[0]
-        preds_list2[i][0][nonzero_idxs] = 0
-        #print(preds_list2[i][0])
-        
-        invalid_steps_game_eval(preds_list2[i],used_skill_1,used_skill_2,used_skill_3,hero_action_dict)
-        if np.count_nonzero(preds_list2[i]) == 0:
-            preds_list2[i][0][0] = 1
-
-        if action_list_actions[i] == 1:
-            #print('sk 1 used')
-            used_skill_1 = 1
-        if action_list_actions[i] == 2:
-            used_skill_2 = 1
-        if action_list_actions[i] == 3:
-            used_skill_3 = 1
-    return preds_list2
 
 #apply_dmg_boost(player_team,player_team.hero1.skill_1())
 '''
@@ -645,14 +588,6 @@ class Battle:
         self.game_count_list = []
         self.epsilon_list = []
         self.lr_holder = self.player.hero1.initial_lr
-
-        self.hero1_game_state_holder_multi_game = []
-        self.hero2_game_state_holder_multi_game = []
-        self.hero3_game_state_holder_multi_game = []
-
-        self.hero1_game_target_holder_multi_game = []
-        self.hero2_game_target_holder_multi_game = []
-        self.hero3_game_target_holder_multi_game = []
         
     def fight_battle(self):
         #print(self.game)
@@ -698,13 +633,13 @@ class Battle:
                 print('reset enemies')
             if game == 1:
                 r1 = [30, 35, 40,45]
-                enemy_team = enemy_servants(hp=30,dmg_max = 3)
+                enemy_team = enemy_servants(hp=40,dmg_max = 3)
             if game == 2:
                 r1 = [40,45,50]
-                enemy_team = enemy_servants(hp=40,dmg_max = 4)
+                enemy_team = enemy_servants(hp=45,dmg_max = 4)
             if game == 3:
                 r1 = [55, 60, 50,65]
-                enemy_team = enemy_servants(hp=45,dmg_max = 5)
+                enemy_team = enemy_servants(hp=50,dmg_max = 5)
             if check_if_alive(player_team) =='alive':
                 while True:
                     round_reward = 0
@@ -833,7 +768,15 @@ class Battle:
 
 
                     if hero3_action[0] != 'pass':
-                        
+                        #if hero3_action[0] == 'passss':
+                        '''
+                        hero3_reward = .5
+                        if game == 1:
+                            hero3_reward +=1
+                        if game == 2:
+                            hero3_reward +=1.5
+
+                        '''
                         apply_buffs(player_team,hero3_action[1])
                         if hero3_action[0] == 'sk1':
                             player_team.hero_dict['hero3'].used_skill_1 = 1
@@ -894,7 +837,7 @@ class Battle:
                     
                     if check_if_alive(player_team) =='alive' and check_if_alive(enemy_team) == 'dead':
                         winner = 'player'
-                        
+
                         round_reward+=1
                         ## check active skills, gets bonus for having them active towards end of rounds?
                         #skill_dict = {'sk1_hero1':0,'sk2_hero1':0,'sk3_hero1':0,
@@ -903,14 +846,11 @@ class Battle:
                         _, active_skill_dict = get_buff_game_state(player_team, return_dict = True)
                         h1_bonus, h2_bonus, h3_bonus = check_active_buffs_for_rewards(active_skill_dict)
                         
-                        #print(self.game,game,turn_counter, 'HERO1 SKILLS USED IN GAME', player_team.hero_dict['hero1'].used_skill_1, player_team.hero_dict['hero1'].used_skill_2, player_team.hero_dict['hero1'].used_skill_3)
-
                         if game == 3: 
+                            print(self.game, 'HERO1 SKILLS USED IN GAME', player_team.hero_dict['hero1'].used_skill_1, player_team.hero_dict['hero1'].used_skill_2, player_team.hero_dict['hero1'].used_skill_3)
                             round_reward+=1
                             self.win +=1
                             hero_rewards = 1
-                            #print(self.game,game,turn_counter,  'HERO1 SKILLS USED IN GAME', player_team.hero_dict['hero1'].used_skill_1, player_team.hero_dict['hero1'].used_skill_2, player_team.hero_dict['hero1'].used_skill_3)
-                            #print('')
                             if self.evaluation == True:
                                 print('game is a win')
                                 print('#'*60)
@@ -947,89 +887,58 @@ class Battle:
                                 for i in range(len(hero1_game_state_list)):
                                     if hero1_game_state_list[i][0] == 1/3: 
                                         if hero1_action_list[i] == 'pass':
-                                            hero1_rewards_list.append(hero_rewards+2)
+                                            hero1_rewards_list.append(hero_rewards+1)
                                         else:
-                                            hero1_rewards_list.append(hero_rewards-2)
+                                            hero1_rewards_list.append(hero_rewards-.5)
 
                                         if hero2_action_list[i] == 'pass':
-                                            hero2_rewards_list.append(hero_rewards+2)
+                                            hero2_rewards_list.append(hero_rewards+1)
                                         else:
-                                            hero2_rewards_list.append(hero_rewards-2)
+                                            hero2_rewards_list.append(hero_rewards-.5)
 
                                         if hero3_action_list[i] == 'pass':
-                                            hero3_rewards_list.append(hero_rewards+2)
+                                            hero3_rewards_list.append(hero_rewards+1)
                                         else:
-                                            hero3_rewards_list.append(hero_rewards-2)
+                                            hero3_rewards_list.append(hero_rewards-.5)
 
                                     if hero1_game_state_list[i][0] == 2/3: 
                                         if hero1_action_list[i] == 'pass':
                                             hero1_rewards_list.append(hero_rewards)
                                         else:
-                                            hero1_rewards_list.append(hero_rewards+2)
+                                            hero1_rewards_list.append(hero_rewards+1)
 
                                         if hero2_action_list[i] == 'pass':
                                             hero2_rewards_list.append(hero_rewards)
                                         else:
-                                            hero2_rewards_list.append(hero_rewards+2)
+                                            hero2_rewards_list.append(hero_rewards+1)
 
                                         if hero3_action_list[i] == 'pass':
                                             hero3_rewards_list.append(hero_rewards)
                                         else:
-                                            hero3_rewards_list.append(hero_rewards+2)
+                                            hero3_rewards_list.append(hero_rewards+1)
                                     if hero1_game_state_list[i][0] == 3/3: 
                                         if hero1_action_list[i] == 'pass':
                                             hero1_rewards_list.append(hero_rewards-2)
                                         else:
-                                            hero1_rewards_list.append(hero_rewards+3)
+                                            hero1_rewards_list.append(hero_rewards+1.5)
 
                                         if hero2_action_list[i] == 'pass':
                                             hero2_rewards_list.append(hero_rewards-2)
                                         else:
-                                            hero2_rewards_list.append(hero_rewards+3)
+                                            hero2_rewards_list.append(hero_rewards+1.5)
 
                                         if hero3_action_list[i] == 'pass':
                                             hero3_rewards_list.append(hero_rewards-2)
                                         else:
-                                            hero3_rewards_list.append(hero_rewards+3)
-
-                                if 'skill_used' not in hero1_action_list:
-                                    hero1_action_list_no_skill = []
-                                    for i in hero1_action_list:
-                                        hero1_action_list_no_skill.append(-1)
-                                    hero1_rewards_list = hero1_action_list_no_skill
-
-
-                                if hero1_action_list[0] == 'skill_used' and hero1_action_list[1] == 'skill_used' and hero1_action_list[2] == 'skill_used':
-                                    hero1_rewards_list[0] = -1
-                                    hero1_rewards_list[1] = -1
-                                    hero1_rewards_list[2] = -1
-                                
-
-                                hero1_targets = process_rewards_get_finalized_preds(hero1_preds_list,hero1_predicted_class_list,hero1_rewards_list,player_team.hero_dict['hero1'].action_dict)
-                                hero2_targets = process_rewards_get_finalized_preds(hero2_preds_list,hero2_predicted_class_list,hero2_rewards_list,player_team.hero_dict['hero2'].action_dict)
-                                hero3_targets = process_rewards_get_finalized_preds(hero3_preds_list,hero3_predicted_class_list,hero3_rewards_list,player_team.hero_dict['hero3'].action_dict)
-                                if np.random.uniform(0, 1) > .99:
-                                    print('')
-                                    print('game, ',self.game)
-                                    print('actions: ',hero1_action_list)
-                                    print('h1 gamestates',hero1_game_state_list)
-                                    print('h1_predsactions: ',hero1_preds_list)
-                                    print('h1 pred_class: ',hero1_predicted_class_list)
-                                    print('h1 rewards: ',hero1_rewards_list)
-                                    print('hero 1 targets',hero1_targets)
-                                #
-                                self.hero1_game_state_holder_multi_game += hero1_game_state_list
-                                self.hero2_game_state_holder_multi_game += hero2_game_state_list
-                                self.hero3_game_state_holder_multi_game += hero3_game_state_list
-
-                                self.hero1_game_target_holder_multi_game += hero1_targets
-                                self.hero2_game_target_holder_multi_game += hero2_targets
-                                self.hero3_game_target_holder_multi_game += hero3_targets
-                                #player_team.hero_dict['hero1'].update(hero1_game_state_list,hero1_targets)
-                                #player_team.hero_dict['hero2'].update(hero2_game_state_list,hero2_targets)
-                                #player_team.hero_dict['hero3'].update(hero3_game_state_list,hero3_targets)
-                                
-                        #player_team.card_picker.update(card_picker_state,round_reward)
+                                            hero3_rewards_list.append(hero_rewards+1.5)
+                                #print(len(hero1_game_state_list))
+                                '''
+                                for i in range(len(hero1_game_state_list)):
+                                    player_team.hero_dict['hero1'].update(hero1_game_state_list[i],hero1_preds_list[i],hero1_predicted_class_list[i],hero1_rewards_list[i])
+                                    player_team.hero_dict['hero2'].update(hero2_game_state_list[i],hero2_preds_list[i],hero2_predicted_class_list[i],hero2_rewards_list[i])
+                                    player_team.hero_dict['hero3'].update(hero3_game_state_list[i],hero3_preds_list[i],hero3_predicted_class_list[i],hero3_rewards_list[i])
+                                '''
+                        player_team.card_picker.update(card_picker_state,round_reward)
 
                         #    player_team.update(current_hand,round_reward)
 
@@ -1079,6 +988,19 @@ class Battle:
                                         hero3_rewards_list.append(hero_rewards-2)
                                 if hero1_game_state_list[i][0] == 2/3: 
                                     if hero1_action_list[i] == 'pass':
+                                        hero1_rewards_list.append(hero_rewards)
+                                    else:
+                                        hero1_rewards_list.append(hero_rewards)
+                                    if hero2_action_list[i] == 'pass':
+                                        hero2_rewards_list.append(hero_rewards)
+                                    else:
+                                        hero2_rewards_list.append(hero_rewards)
+                                    if hero3_action_list[i] == 'pass':
+                                        hero3_rewards_list.append(hero_rewards)
+                                    else:
+                                        hero3_rewards_list.append(hero_rewards)
+                                if hero1_game_state_list[i][0] == 3/3: 
+                                    if hero1_action_list[i] == 'pass':
                                         hero1_rewards_list.append(hero_rewards-1)
                                     else:
                                         hero1_rewards_list.append(hero_rewards+1)
@@ -1090,51 +1012,26 @@ class Battle:
                                         hero3_rewards_list.append(hero_rewards-1)
                                     else:
                                         hero3_rewards_list.append(hero_rewards+1)
-                                if hero1_game_state_list[i][0] == 3/3: 
-                                    if hero1_action_list[i] == 'pass':
-                                        hero1_rewards_list.append(hero_rewards-1)
-                                    else:
-                                        hero1_rewards_list.append(hero_rewards+2)
-                                    if hero2_action_list[i] == 'pass':
-                                        hero2_rewards_list.append(hero_rewards-1)
-                                    else:
-                                        hero2_rewards_list.append(hero_rewards+2)
-                                    if hero3_action_list[i] == 'pass':
-                                        hero3_rewards_list.append(hero_rewards-1)
-                                    else:
-                                        hero3_rewards_list.append(hero_rewards+2)
-
-                            hero1_targets = process_rewards_get_finalized_preds(hero1_preds_list,hero1_predicted_class_list,hero1_rewards_list,player_team.hero_dict['hero1'].action_dict)
-                            hero2_targets = process_rewards_get_finalized_preds(hero2_preds_list,hero2_predicted_class_list,hero2_rewards_list,player_team.hero_dict['hero2'].action_dict)
-                            hero3_targets = process_rewards_get_finalized_preds(hero3_preds_list,hero3_predicted_class_list,hero3_rewards_list,player_team.hero_dict['hero3'].action_dict)
-
-                            self.hero1_game_state_holder_multi_game += hero1_game_state_list
-                            self.hero2_game_state_holder_multi_game += hero2_game_state_list
-                            self.hero3_game_state_holder_multi_game += hero3_game_state_list
-
-                            self.hero1_game_target_holder_multi_game += hero1_targets
-                            self.hero2_game_target_holder_multi_game += hero2_targets
-                            self.hero3_game_target_holder_multi_game += hero3_targets
-                            
-                            #player_team.hero_dict['hero1'].update(hero1_game_state_list,hero1_targets)
-                            #player_team.hero_dict['hero2'].update(hero2_game_state_list,hero2_targets)
-                            #player_team.hero_dict['hero3'].update(hero3_game_state_list,hero3_targets)
                                     
+                            for i in range(len(hero1_game_state_list)): 
+                                player_team.hero_dict['hero1'].update(hero1_game_state_list[i],hero1_preds_list[i],hero1_predicted_class_list[i],hero1_rewards_list[i])
+                                player_team.hero_dict['hero2'].update(hero2_game_state_list[i],hero2_preds_list[i],hero2_predicted_class_list[i],hero2_rewards_list[i])
+                                player_team.hero_dict['hero3'].update(hero3_game_state_list[i],hero3_preds_list[i],hero3_predicted_class_list[i],hero3_rewards_list[i])
                             
                             #player_team.hero_dict['hero1'].update(hero1_state,hero1_reward)
                             #player_team.hero_dict['hero2'].update(hero2_state,hero2_reward)
                             #player_team.hero_dict['hero3'].update(hero3_state,hero3_reward)
-                            #player_team.card_picker.update(card_picker_state,round_reward)
+                            player_team.card_picker.update(card_picker_state,round_reward)
                         break
                     
-                    #if self.evaluation == False:
+                    if self.evaluation == False:
                         
                         #print(hero2_reward,hero2_action)
-                        #player_team.hero_dict['hero1'].update(hero1_state,hero1_reward)
-                        #player_team.hero_dict['hero2'].update(hero2_state,hero2_reward)
-                        #player_team.hero_dict['hero3'].update(hero3_state,hero3_reward)
+                        player_team.hero_dict['hero1'].update(hero1_state,hero1_reward)
+                        player_team.hero_dict['hero2'].update(hero2_state,hero2_reward)
+                        player_team.hero_dict['hero3'].update(hero3_state,hero3_reward)
                         
-                        #player_team.card_picker.update(card_picker_state,round_reward)
+                        player_team.card_picker.update(card_picker_state,round_reward)
 
                     
 
@@ -1173,51 +1070,13 @@ class Battle:
     
     def report(self,player_team):
         #turned off for plotting 9/18
-        if self.game % 500 == 0:
+        if self.game % 1000 == 0:
 
             self.game_count_list.append(str(self.game))
             self.result_list.append(str(self.win / (self.win + self.loss)))
             self.epsilon_list.append(str(player_team.hero1._epsilon))
             df = pd.DataFrame(list(zip(self.game_count_list, self.result_list,self.epsilon_list)), columns =['game_number', 'win_loss','exploration'])
             df.to_csv('{}/{}/run_record.csv'.format('fgo_environment',save_dir))
-
-        if self.game % 500 == 0:
-            print('UPDATING MODELS')
-            '''
-            self.hero1_game_state_holder_multi_game.append(hero1_game_state_list)
-            self.hero2_game_state_holder_multi_game.append(hero2_game_state_list)
-            self.hero3_game_state_holder_multi_game.append(hero3_game_state_list)
-
-            self.hero1_game_target_holder_multi_game.append(hero1_targets)
-            self.hero1_game_target_holder_multi_game.append(hero2_targets)
-            self.hero1_game_target_holder_multi_game.append(hero3_targets)
-            '''
-
-            #player_team.hero_dict['hero1'].update(self.hero1_game_state_holder_multi_game,self.hero1_game_target_holder_multi_game)
-            #player_team.hero_dict['hero2'].update(self.hero2_game_state_holder_multi_game,self.hero1_game_target_holder_multi_game)
-            #player_team.hero_dict['hero3'].update(self.hero3_game_state_holder_multi_game,self.hero1_game_target_holder_multi_game)
-            '''
-            hero1_targetzz = [arr.tolist() for arr in self.hero1_game_target_holder_multi_game]
-            hero2_targetzz = [arr.tolist() for arr in self.hero2_game_target_holder_multi_game]
-            hero3_targetzz = [arr.tolist() for arr in self.hero3_game_target_holder_multi_game]
-
-            df = pd.DataFrame(list(zip(self.hero1_game_state_holder_multi_game, hero1_targetzz)), columns =['game_state', 'targets'])
-            df.to_csv('{}/{}/rundata_short_hero1.csv'.format('fgo_environment',save_dir))
-
-            df = pd.DataFrame(list(zip(self.hero2_game_state_holder_multi_game, hero2_targetzz)), columns =['game_state', 'targets'])
-            df.to_csv('{}/{}/rundata_short_hero2.csv'.format('fgo_environment',save_dir))
-
-            df = pd.DataFrame(list(zip(self.hero3_game_state_holder_multi_game, hero3_targetzz)), columns =['game_state', 'targets'])
-            df.to_csv('{}/{}/rundata_short_hero3.csv'.format('fgo_environment',save_dir))
-            '''
-            self.hero1_game_state_holder_multi_game = []
-            self.hero2_game_state_holder_multi_game = []
-            self.hero3_game_state_holder_multi_game = []
-
-            self.hero1_game_target_holder_multi_game = []
-            self.hero1_game_target_holder_multi_game = []
-            self.hero1_game_target_holder_multi_game = []
-            print('FINISHED UPDATING MODELS')
 
         if self.game % self._num_learning_rounds == 0:
             print('##############################################')
@@ -1260,7 +1119,7 @@ class Battle:
             
             self.win = 0
             self.loss = 0
-            player_team.card_picker.save_rl_model('{}/{}_iteration_{}'.format('fgo_environment',save_dir,rl_model_name,self.game))
+            player_team.card_picker.save_rl_model('{}/{}_iteration_{}'.format(save_dir,rl_model_name,self.game))
             player_team.hero1.save_rl_model('{}/{}/{}_iteration_{}'.format('fgo_environment',save_dir,player_team.hero1.name,self.game))
             player_team.hero2.save_rl_model('{}/{}/{}_iteration_{}'.format('fgo_environment',save_dir,player_team.hero1.name,self.game))
             player_team.hero3.save_rl_model('{}/{}/{}_iteration_{}'.format('fgo_environment',save_dir,player_team.hero1.name,self.game))
@@ -1303,12 +1162,12 @@ class Battle:
             # after 150K outfits the rate of exploration gets decreased
             # by .1 every time this eval process is done
             
-            if self.game > 20000:
+            if self.game > 25000:
                 if exploration_holder < .9:
                     exploration_holder += .1
                 if exploration_holder >= .9:
                     exploration_holder = .9
-                self.lr_holder = self.lr_holder *.02
+                self.lr_holder = self.lr_holder *.05
                 k.set_value(player_team.hero1._model.optimizer.lr, self.lr_holder)
                 k.set_value(player_team.hero2._model.optimizer.lr, self.lr_holder)
                 k.set_value(player_team.hero3._model.optimizer.lr, self.lr_holder)
@@ -1326,7 +1185,7 @@ class Battle:
             self.loss = 0
 
             if self.game % 1000 == 0:
-                player_team.card_picker.save_rl_model('{}/{}_iteration_{}'.format('fgo_environment',save_dir,rl_model_name,self.game))
-                player_team.hero1.save_rl_model('{}/{}/{}_iteration_{}'.format('fgo_environment',save_dir,player_team.hero1.name,self.game))
-                player_team.hero2.save_rl_model('{}/{}/{}_iteration_{}'.format('fgo_environment',save_dir,player_team.hero2.name,self.game))
-                player_team.hero3.save_rl_model('{}/{}/{}_iteration_{}'.format('fgo_environment',save_dir,player_team.hero3.name,self.game))
+                player_team.card_picker.save_rl_model('{}/{}_iteration_{}'.format(save_dir,rl_model_name,self.game))
+                #player_team.hero1.save_rl_model('{}/{}/{}_iteration_{}'.format('fgo_environment',save_dir,player_team.hero1.name,self.game))
+                #player_team.hero2.save_rl_model('{}/{}/{}_iteration_{}'.format('fgo_environment',save_dir,player_team.hero2.name,self.game))
+                #player_team.hero3.save_rl_model('{}/{}/{}_iteration_{}'.format('fgo_environment',save_dir,player_team.hero3.name,self.game))

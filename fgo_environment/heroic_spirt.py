@@ -34,7 +34,7 @@ from keras.models import load_model
 
 from fgo_environment.utils import use_predicted_probability, convert_card_list
 from fgo_environment.netlearner import DQNLearner
-
+from fgo_environment.utils import use_predicted_probability, convert_card_list
 def softmax(X):
     expo = np.exp(X)
     expo_sum = np.sum(np.exp(X))
@@ -83,7 +83,7 @@ class HeroicSpirit():
                  NP_damage=20,
                  spot='hero1',
                  deck=None,
-                 _epsilon=.3,
+                 _epsilon=1.0,
                  _discount=.1
                  ):
         super().__init__()
@@ -125,31 +125,47 @@ class HeroicSpirit():
                             1: ('sk1', self.skill_1()),
                             2: ('sk2', self.skill_2()),
                             3: ('sk3', self.skill_3())}
-        self.initial_lr = 0.00001
+        self.initial_lr = 0.001
         self.class_weight = {0: 1.0,
-                1: 5.0,
-                2: 5.0,
-                3: 5.0}
+                1: 2.0,
+                2: 2.0,
+                3: 2.0}
+
         model = Sequential()
 
-        model.add(Dense(64, init='glorot_normal', input_dim=self.feature_vector_len,kernel_regularizer=keras.regularizers.l2(l=0.02)))#activation = 'relu', input_dim=self.feature_vector_len))
-        model.add(Dropout(0.4))
-        model.add(LeakyReLU(alpha=0.03))
-        model.add(Dense(32, init='glorot_normal',kernel_regularizer=keras.regularizers.l2(l=0.02)))#$, activation = 'relu'))
-        model.add(Dropout(0.4))
-        model.add(LeakyReLU(alpha=0.03))
-        #model.add(Dense(64, init='glorot_normal',kernel_regularizer=keras.regularizers.l2(l=0.02)))#, activation = 'relu'))
-        #model.add(Dropout(0.5))
+        model.add(Dense(1024, init='glorot_normal', input_dim=self.feature_vector_len))#activation = 'relu', input_dim=self.feature_vector_len))
+        #model.add(Dropout(0.4))
+        #model.add(LeakyReLU(alpha=0.05))
+        model.add(Dense(512, init='glorot_normal', activation = 'relu'))
+        #model.add(Dropout(0.4))
+        #model.add(LeakyReLU(alpha=0.05))
+
+
+
+        model.add(Dense(len(self.action_dict), init='glorot_normal',activation='sigmoid'))
+        opt = SGD(lr=self.initial_lr, momentum=0.9)#, clipnorm=2.0)
+        model.compile(loss='binary_crossentropy', optimizer=opt)
+
+        #model.add(Dense(256, init='glorot_normal', input_dim=self.feature_vector_len,kernel_regularizer=keras.regularizers.l2(l=0.02)))#activation = 'relu', input_dim=self.feature_vector_len))
+        #model.add(Dropout(0.4))
+        #model.add(LeakyReLU(alpha=0.03))
+        #model.add(Dense(128, init='glorot_normal',kernel_regularizer=keras.regularizers.l2(l=0.02)))#$, activation = 'relu'))
+        #model.add(Dropout(0.4))
+        #model.add(LeakyReLU(alpha=0.03))
+        #model.add(Dense(32, init='glorot_normal',kernel_regularizer=keras.regularizers.l2(l=0.02)))#, activation = 'relu'))
+        #model.add(Dropout(0.4))
         #model.add(LeakyReLU(alpha=0.03))
         #model.add(Dense(64, init='glorot_normal',kernel_regularizer=keras.regularizers.l2(l=0.2)))#, activation = 'relu'))
         #model.add(LeakyReLU(alpha=0.01))
 
-        model.add(Dense(len(self.action_dict), init='glorot_normal',activation='linear'))
-        opt = SGD(lr=self.initial_lr, momentum=0.9, clipnorm=2.0)
+        #model.add(Dense(len(self.action_dict), init='glorot_normal',activation='sigmoid'))
+        #opt = SGD(lr=self.initial_lr, momentum=0.9, clipnorm=2.0)
         #opt = Adam(learning_rate=self.initial_lr)
-        model.compile(loss='binary_crossentropy', optimizer=opt)
+        #model.compile(loss='binary_crossentropy', optimizer=opt)
 
         self._model = model
+
+        #print(self._model.summary())
 
     def skill_1(self):
         #print('skill_1')
@@ -193,7 +209,7 @@ class HeroicSpirit():
         sk2_used = self.used_skill_2
         sk3_used = self.used_skill_3
 
-        new_pred_min = np.min(preds[0])-.5 #with softmax everything is just probabilities
+        new_pred_min = 0 #np.min(preds[0])-.5 #with softmax everything is just probabilities
         for _index in range(len(self.action_dict)):
             if 'sk1' in self.action_dict[_index] and sk1_used == 1:
                 preds[0][_index] = new_pred_min
@@ -210,6 +226,11 @@ class HeroicSpirit():
             del action_dict_copy[2]
         if self.used_skill_3 == 1:
             del action_dict_copy[3]
+        if random_pass==0:
+            if len(action_dict_copy) >1:
+                del action_dict_copy[0]
+
+
 
         random_pass_list = []
         if random_pass >0:
@@ -232,19 +253,28 @@ class HeroicSpirit():
         # if the randomly generated value is less than the epsilon value
         # we go down the Exploitation route... (I might have defined this backwards from normal...)
         if np.random.uniform(0, 1) < self._epsilon:
+            #print('not_random')
             action = use_predicted_probability(self.action_dict, predicted_class)
         # When the random number is greater than the epsilon value we randomly select an action
         # and we see how it goes!
         else:
+            
             if state[0] ==1/3:
-                random_pass_number = 1
+                random_pass_number = 2
             if state[0] ==2/3:
-                random_pass_number = .5
+                random_pass_number = 1
             if state[0] ==3/3:
                 random_pass_number = 0
+            
+            #random_pass_number = 0
+            #print('random')
             random_action_key_value = self.get_random_action(random_pass=random_pass_number)
             predicted_class = random_action_key_value[0]
             action = random_action_key_value[1]
+            #if state[0] ==1/3:
+            #    print('passing_ round1')
+            #    predicted_class = 0
+            #    action = ('pass', 'pass')
             #action = use_predicted_probability(self.action_dict,predicted_classs)
 
         # store some stuff for later
@@ -254,7 +284,7 @@ class HeroicSpirit():
 
         return action,predicted_class, preds 
 
-    def update(self, state, preds,predicted_class, reward):
+    def update(self, state_list, preds_list):
         '''
         reward:
                 reward genearted from the game envionment
@@ -264,21 +294,44 @@ class HeroicSpirit():
                 discounted model outputs. This gets combined with with the game environment rewards
         '''
         if self._learning:
+
+
+            game_state_array = np.reshape(np.asarray(state_list), (len(state_list), self.feature_vector_len))
             # In this version I call predict again... could just use self._last_target... *shrug
-            game_state_array = np.reshape(np.asarray(state), (1, self.feature_vector_len))
+            #game_state_array = np.reshape(np.asarray(state), (1, self.feature_vector_len))
+            preds_target = np.array([l[0].tolist() for l in preds_list])
             #preds = self._model.predict([outfit_state_array], batch_size=1)
             #self.invalid_steps(preds)
-            maxQ = np.amax(preds)
+            #maxQ = np.amax(preds) # use the vale
+            #maxQ = preds[0][predicted_class]
             #new = self._discount * maxQ #discount is applied bc it is a future action??? idk.. is standard?
 
-            combined_reward = reward + maxQ
+            #combined_reward = reward + maxQ
+            #normalized = (combined_reward-min(combined_reward))/(max(combined_reward)-min(combined_reward))
+            #if reward >=0:
+            #    group_reward_mod = -reward
+            #else:
+            #    group_reward_mod = abs(reward)
 
-            preds[0][predicted_class] = combined_reward
-            softmaxed_adjusted_preds = softmax(preds)
-            #print(preds,combined_reward,softmaxed_adjusted_preds)
+            #preds[0][predicted_class] = combined_reward
+
+            #nonzero_idxs = np.where(preds[0] > 1)[0]
+            #preds[0][nonzero_idxs] = 1
+
+            #nonzero_idxs = np.where(preds_list[i][0] < 0)[0]
+            #preds[0][nonzero_idxs] = 0
+            '''
+            print(preds)
+            for i in range(len(preds[0])):
+                normalized_i = (preds[0][i]-np.amin(preds))/(np.amax(preds)-np.amin(preds))
+                preds[0][i] = normalized_i
+            print('normalized?:', preds)
+            '''
+            #softmaxed_adjusted_preds = softmax(preds)
+            #print(preds,combined_reward,softmaxed_adjusted_preds)MaMagikagikrparp us used ed flyspla!.sh...!  wuandt?? IS??? NOw rethinking its life....
 
             # at every update we are doing are training on a single batch of size 1
-            self._model.fit(game_state_array, softmaxed_adjusted_preds, batch_size=1, epochs=1, verbose=0,class_weight=self.class_weight)
+            self._model.fit(game_state_array, preds_target, batch_size=2048, epochs=1000, verbose=0,class_weight=self.class_weight)
     
     def save_rl_model(self,model_name):
 
@@ -296,7 +349,7 @@ class JAlter(HeroicSpirit):
                  _epsilon=.3):
         super().__init__(name, health, NP, NP_damage, spot)
 
-        self._model = load_model('D:/projects/multiagent_pendragon_dev_2/fgo_environment/models/run6_good_run_8K/jalter_iteration_9000.h5')
+        self._model = load_model('D:/projects/multiagent_pendragon_dev_2/fgo_environment/models/run9_policy_gradient_100game/jalter_iteration_9000.h5')
 
     def skill_1(self): #should be a crit boost but unsure how to do that atm??
         #print('skill_1')
@@ -348,7 +401,7 @@ class Ishtar(HeroicSpirit):
                  _epsilon=.3):
         super().__init__(name, health, NP, NP_damage,spot)
 
-        self.model = load_model('D:/projects/multiagent_pendragon_dev_2/fgo_environment/models/run6_good_run_8K/jalter_iteration_9000.h5')
+        self.model = load_model('D:/projects/multiagent_pendragon_dev_2/fgo_environment/models/run9_policy_gradient_100game/Ishtar_iteration_2000.h5')
 
     def skill_1(self): #should be a crit boost but unsure how to do that atm??
         #print('skill_1')
@@ -399,7 +452,7 @@ class ArtoriaSaber(HeroicSpirit):
                  deck=None,
                  _epsilon=.3):
         super().__init__(name, health, NP, NP_damage,spot)
-        self.model = load_model('D:/projects/multiagent_pendragon_dev_2/fgo_environment/models/run6_good_run_8K/artoria_pendragon_iteration_9000.h5')
+        self.model = load_model('D:/projects/multiagent_pendragon_dev_2/fgo_environment/models/run9_policy_gradient_100game/artoria_pendragon_iteration_3000.h5')
     def skill_1(self): #should be a crit boost but unsure how to do that atm??
         #print('skill_1')
         output_dict = {'name': 'sk1_'+self.spot+'_'+self.name+'_charisma_B',

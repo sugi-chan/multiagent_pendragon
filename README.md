@@ -1,14 +1,14 @@
 <p align="center">
-  <img src="https://i.imgur.com/kasQyPl.png">
+  <img width="640" height="400" src="https://cdn-images-1.medium.com/max/1200/1*OW5YsC_XyyBn6bakstvxaA.jpeg">
 </p>
 
-# Multi-Agent Pendragon
+# Pendragon
 
-I built in my first bot [project pendragon](https://github.com/sugi-chan/project_pendragon) and the reinforcement learning bot that I built in my second bot [pendragon alter](https://github.com/sugi-chan/Pendragon_Alter). Multi-Agent Pendragon is the third of my FGO bots where I attempting to build more complex RL agents to play the game at a higher level. Current game is played using 4 RL agents. One for picking cards and 3 to control the 3 characters on the field.
+This repository is an attempt to open source some of the work I have done around building a number of bots to play the game Fate Grand Order. The current state of this bot is that it uses the framework I built in my first bot [project pendragon](https://github.com/sugi-chan/project_pendragon) and the reinforcement learning bot that I built in my second bot [pendragon alter](https://github.com/sugi-chan/Pendragon_Alter). While the structure of this bot is relatively similar to my two previous ones, it is different in a number of ways.
 
 ## Upgrades from the previous bots
 
-1) **Skills can now be used**: Adding in multiple agents to allow for skill usage. Each character is represented by an individual RL agent.
+1) **Skills can now be used**: The RL bot does not have access to skills, but I have added an interface via `battle plans` with an option when running the `pendragon.py` script to feed in a formatted csv for round by round or turn by turn orders. This allows for skills and NPs to be used at specific timings and I have found useful for 3 turn farming of embers or clearing more difficult quests repeatedly
 
 2) **Turn tracking**: I had struggled previously on how to track turns. I added a `round/wave counter` essentially made a 3 class classifier to count which round it is. downsides of this are it wouldn't detect the rare quest with a 4th wave, and isn't the most effective method for turn counting... However my logic was that most skills or NP usages that need to be scripted would need to be used on specific waves/rounds.
 
@@ -37,8 +37,4 @@ I built in my first bot [project pendragon](https://github.com/sugi-chan/project
 - clean up code stylistically and refactor parts of it to make it cleaner. 
 
 - add more documentation on how to do things like setup a `battle plan`.
-
-- need a `requirements.txt`
-
-- docker container?
 
