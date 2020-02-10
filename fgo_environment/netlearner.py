@@ -219,7 +219,11 @@ from keras.models import load_model
 #
 #D:/datasets/datascience/hack_week/m_m/dobby/outfit_rl
 # load model
+<<<<<<< Updated upstream
 model = load_model('D:/projects/multiagent_pendragon_dev_2/fgo_environment/models/run2_good_run/new_chaldea_card_model_12_7_19_iteration_40000.h5')
+=======
+#model2 = load_model('D:/projects/multiagent_pendragon_dev_2/fgo_environment/models/run8_only_card/new_chaldea_card_model_12_7_19_iteration_30000.h5')
+>>>>>>> Stashed changes
 #rl_model_name = 'v8_judge_only_400K'
 class DQNLearner():
     def __init__(self,
@@ -232,7 +236,11 @@ class DQNLearner():
         self._learning_rate = _learning_rate
         self._discount = _discount
         self._epsilon = 1.0 #ADJUSTED _epsilon
+<<<<<<< Updated upstream
         self.len_feature_vec = 5+9
+=======
+        self.len_feature_vec = 5
+>>>>>>> Stashed changes
 
         # Create Model
         # as of 9/17 best model is the 5-64-128 layer mlp. 
@@ -255,7 +263,11 @@ class DQNLearner():
         model.compile(loss='mse', optimizer=opt)
 
         #added in for testing
+<<<<<<< Updated upstream
         model = load_model('D:/projects/multiagent_pendragon_dev_2/fgo_environment/models/run2_good_run/new_chaldea_card_model_12_7_19_iteration_40000.h5')
+=======
+        model = load_model('D:/projects/multiagent_pendragon_dev_2/fgo_environment/models/card_model_trainingnew/new_chaldea_card_model_12_7_19_iteration_420000.h5')
+>>>>>>> Stashed changes
 
         self._model = model
 

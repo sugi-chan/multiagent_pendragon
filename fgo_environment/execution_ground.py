@@ -48,11 +48,21 @@ class team_chaldela:
 
 class enemy_servants:
     
-    def __init__(self,hp,dmg_max):
+    def __init__(self,hp,dmg_max,np_charge=5,np_damage=5):
         self.hit_points = hp
         self.dmg_max = dmg_max
+        self.np_charge = np_charge
+        self.np_damage = np_damage
     def deal_damage(self):
-        return randint(1, self.dmg_max ) 
+        return randint(1, self.dmg_max )
+
+    def use_np(self,turn_counter):
+
+        extra_damage = 0
+        if turn_counter % self.np_charge ==0:
+            extra_damage += self.np_damage
+        return extra_damage
+
 
 '''
 way to shuffle 15 card deck and deal 5 cards.
@@ -262,7 +272,7 @@ def card_chain_effect(cards_to_play,team_obj,round_reward):
         team_obj.hero1.NP_charge +=20 
         team_obj.hero2.NP_charge +=20 
         team_obj.hero3.NP_charge +=20
-        round_reward+=2
+        round_reward+=3
     elif cards_to_play.count('quick') == 3:
         team_obj.current_stars +=10 #this is still fine
         round_reward+=2
@@ -293,7 +303,7 @@ def use_NP(team_obj,total_damage):
         team_obj.hero1.NP_charge = 0
 
     if team_obj.hero2.NP_charge >= 100:
-        #print(team_obj.hero2.name, 'used np')
+        #print(team_obj.hero2.name, 'used np', team_obj.hero2.NP_damage)
         total_damage += team_obj.hero2.NP_damage
         team_obj.hero2.NP_charge = 0
 
@@ -314,6 +324,14 @@ def calc_chain_damage(team_obj, card_chain, round_reward,servant_list):
     charge_hero_np(team_obj,'hero1',team_obj.hero_dict['hero1'].NP_gain_buff)
     charge_hero_np(team_obj,'hero2',team_obj.hero_dict['hero2'].NP_gain_buff)
     charge_hero_np(team_obj,'hero3',team_obj.hero_dict['hero3'].NP_gain_buff)
+
+    hero_np_used = ''
+    if team_obj.hero1.NP_charge >= 100:
+        hero_np_used += ' '+str(team_obj.hero1.name)+ ' used ult ' +str(team_obj.hero1.NP_damage)
+    if team_obj.hero2.NP_charge >= 100:
+        hero_np_used += ' '+str(team_obj.hero2.name)+ ' used ult ' +str(team_obj.hero2.NP_damage)
+    if team_obj.hero3.NP_charge >= 100:
+        hero_np_used += ' '+str(team_obj.hero3.name)+ ' used ult ' +str(team_obj.hero3.NP_damage)
     # zero out the np_gain_buffs
     team_obj.hero_dict['hero1'].NP_gain_buff = 0
     team_obj.hero_dict['hero2'].NP_gain_buff = 0
@@ -322,7 +340,7 @@ def calc_chain_damage(team_obj, card_chain, round_reward,servant_list):
     #using the NP should occur before card chain effects are calculated
     # player_team.hero_dict['hero2'].NP_gain_buff
     total_damage = use_NP(team_obj,total_damage)
-    
+    np_damage = total_damage
     
     #arts and quick chain bonuses are executed in the 
     # card chain effect function
@@ -354,7 +372,7 @@ def calc_chain_damage(team_obj, card_chain, round_reward,servant_list):
     if team_obj.hero3.NP_charge >= 100:
         round_reward +=1
 
-    return total_damage, round_reward
+    return total_damage, round_reward,np_damage,hero_np_used
 
 def apply_dmg_boost(team_obj, action_skill):
     targets = action_skill['target']
@@ -578,8 +596,6 @@ def check_active_buffs_for_rewards(skill_dict):
                 
     return hero1_reward_bonus,hero2_reward_bonus,hero3_reward_bonus
 
-<<<<<<< Updated upstream
-=======
 def process_rewards_get_finalized_preds(preds_list,action_list_actions,reward_list,hero_action_dict):
     def invalid_steps_game_eval(preds,sk1,sk2,sk3,hero_action_dict,super_sk3_used):
         sk1_used = sk1
@@ -725,7 +741,6 @@ def process_rewards_get_finalized_preds(preds_list,action_list_actions,reward_li
 
 
     return preds_list2
->>>>>>> Stashed changes
 
 #apply_dmg_boost(player_team,player_team.hero1.skill_1())
 '''
@@ -741,11 +756,7 @@ as the training process goes on
 
 class Battle:
     
-<<<<<<< Updated upstream
-    def __init__(self, num_learning_rounds =None, learner = Chaldea(), report_every=100):
-=======
     def __init__(self, num_learning_rounds =None, learner = Chaldea(), report_every=10000):
->>>>>>> Stashed changes
         self._num_learning_rounds = num_learning_rounds
         self._report_every = report_every
         self.player = learner
@@ -754,22 +765,31 @@ class Battle:
         self.game = 1
         self.evaluation = False
         self.og_hitpoints = self.player.hit_points
+
+        self.turn_to_beat = 15
+
         self.result_list = []
         self.game_count_list = []
-<<<<<<< Updated upstream
-=======
         self.epsilon_list = []
 
         self.win_len_full = [] # This one does not
         self.game_len_list = [] # This one gets reset
 
         self.lr_list = []
->>>>>>> Stashed changes
         self.lr_holder = self.player.hero1.initial_lr
+
+        self.hero1_game_state_holder_multi_game = []
+        self.hero2_game_state_holder_multi_game = []
+        self.hero3_game_state_holder_multi_game = []
+
+        self.hero1_game_target_holder_multi_game = []
+        self.hero2_game_target_holder_multi_game = []
+        self.hero3_game_target_holder_multi_game = []
         
     def fight_battle(self):
         #print(self.game)
         player_team = self.reset_battle()
+        
         #print('####################################')
         #print(player_team.hero2.used_skill_1,player_team.hero2.used_skill_2,player_team.hero2.used_skill_3)
         #print('####################################')
@@ -803,26 +823,30 @@ class Battle:
                 print('')
                 print('#'*50)
                 print('ITS SHOW TIME! round: ',game)
+                print('')
+                print('team ep',player_team._epsilon)
+                print('hero1 ep',player_team.hero1._epsilon)
                 print('#'*50)
                 print('reset enemies')
             if game == 1:
                 r1 = [30, 35, 40,45] 
-                # hard 40
-                enemy_team = enemy_servants(hp=40,dmg_max = 3)
+                # hard 40 
+                #    def __init__(self,hp,dmg_max,np_charge=5,np_damage=5):
+
+                enemy_team = enemy_servants(hp=30,dmg_max = 3,np_charge=4,np_damage=5)
+                turns_since_round_start = 1
             if game == 2:
                 r1 = [40,45,50]
                 # hard 65
-                enemy_team = enemy_servants(hp=43,dmg_max = 4)
+                enemy_team = enemy_servants(hp=55,dmg_max = 4,np_charge=4,np_damage=5)
+                turns_since_round_start = 1
                 #enemy_team = enemy_servants(hp=65,dmg_max = 4)
             if game == 3:
                 r1 = [55, 60, 50,65]
-<<<<<<< Updated upstream
-                enemy_team = enemy_servants(hp=50,dmg_max = 5)
-=======
                 # hard 80
-                enemy_team = enemy_servants(hp=44,dmg_max = 5)
+                enemy_team = enemy_servants(hp=140,dmg_max = 5,np_charge=4,np_damage=10)
+                turns_since_round_start = 1
                 #enemy_team = enemy_servants(hp=80,dmg_max = 5)
->>>>>>> Stashed changes
             if check_if_alive(player_team) =='alive':
                 while True:
                     round_reward = 0
@@ -830,7 +854,9 @@ class Battle:
                     hero2_reward = 0
                     hero3_reward = 0
                     pass_reward = 0
-                    enemy_dps = enemy_team.deal_damage()
+
+                    enemy_dps = enemy_team.deal_damage() + enemy_team.use_np(turns_since_round_start)
+                    
 
                     #### PLAYER TURN SECTION
                     current_hand, servant_numbers = deal_hand(player_team.card_deck)
@@ -868,8 +894,10 @@ class Battle:
                     #hero1_state = [game/3]+[turn_counter/15]+get_buff_game_state(player_team)+get_skill_use_game_state(player_team)
                     #hero1_state = [game/3]+get_buff_game_state(player_team)+get_skill_use_game_state(player_team)
                     #hero1_state = [game/3]+[turn_counter/15]#+get_buff_game_state(player_team)+get_skill_use_game_state(player_team)
-                    hero1_state = [game]+[turn_counter]+get_skill_use_game_state(player_team)
-
+                    #hero1_state = [game]+[turn_counter]+get_skill_use_game_state(player_team)
+                    #hero1_state = [game]+get_skill_use_game_state(player_team)
+                    hero1_state = [game]+[turns_since_round_start]+get_skill_use_game_state(player_team)
+                    
                     hero1_action, hero1_pred_class, hero1_preds = player_team.hero_dict['hero1'].get_action(hero1_state)
                     #action,predicted_classs, preds
                     hero1_game_state_list.append(hero1_state)
@@ -904,7 +932,9 @@ class Battle:
                     #hero2_state = [game/3]+[turn_counter/15]+get_buff_game_state(player_team)+get_skill_use_game_state(player_team)
                     #hero2_state = [game/3]+get_buff_game_state(player_team)+get_skill_use_game_state(player_team)
                     #hero2_state = [game/3]+[turn_counter/15]#+get_buff_game_state(player_team)+get_skill_use_game_state(player_team)
-                    hero2_state = [game]+[turn_counter]+get_skill_use_game_state(player_team)
+                    #hero2_state = [game]+[turn_counter]+get_skill_use_game_state(player_team)
+                    #hero2_state = [game]+get_skill_use_game_state(player_team)
+                    hero2_state = [game]+[turns_since_round_start]+get_skill_use_game_state(player_team)
 
                     hero2_action, hero2_pred_class, hero2_preds = player_team.hero_dict['hero2'].get_action(hero2_state)
 
@@ -944,8 +974,9 @@ class Battle:
                     ##hero3_state = [game/3]+[turn_counter/15]+get_buff_game_state(player_team)+get_skill_use_game_state(player_team)
                     #hero3_state = [game/3]+get_buff_game_state(player_team)+get_skill_use_game_state(player_team)
                     #hero3_state = [game/3]+[turn_counter/15]#+get_buff_game_state(player_team)+get_skill_use_game_state(player_team)
-                    hero3_state = [game]+[turn_counter]+get_skill_use_game_state(player_team)
-
+                    #hero3_state = [game]+[turn_counter]+get_skill_use_game_state(player_team)
+                    #hero3_state = [game]+get_skill_use_game_state(player_team)
+                    hero3_state = [game]+[turns_since_round_start]+get_skill_use_game_state(player_team)
                     hero3_action, hero3_pred_class, hero3_preds = player_team.hero_dict['hero3'].get_action(hero3_state)
 
                     hero3_game_state_list.append(hero3_state)
@@ -957,15 +988,7 @@ class Battle:
 
 
                     if hero3_action[0] != 'pass':
-                        #if hero3_action[0] == 'passss':
-                        '''
-                        hero3_reward = .5
-                        if game == 1:
-                            hero3_reward +=1
-                        if game == 2:
-                            hero3_reward +=1.5
-
-                        '''
+                        
                         apply_buffs(player_team,hero3_action[1])
                         if 'sk1' in hero3_action[0]:
                             player_team.hero_dict['hero3'].used_skill_1 = 1
@@ -998,15 +1021,10 @@ class Battle:
                     #3 card tuple fed into pick_cards function which will generate the hand and start
                     #dmg calculations
                     converted_current_hand = convert_card_list(current_hand)
-<<<<<<< Updated upstream
-                    card_picker_state = converted_current_hand+get_buff_game_state(player_team)#+get_skill_use_game_state(player_team)
-
-=======
                     #print(type(converted_current_hand),type(get_buff_game_state(player_team)))
 
                     card_picker_state = list(converted_current_hand[0])#+ get_buff_game_state(player_team)#+get_skill_use_game_state(player_team)
                     
->>>>>>> Stashed changes
                     p1_action = player_team.card_picker.get_action(card_picker_state) #comment out for auto testing
 
                     #p1_action = random_pick_cards() #testing pipeline
@@ -1019,16 +1037,44 @@ class Battle:
                         print('current hand: ',current_hand)
                         print('cards to play: ',picked_cards, 'indexes: ', p1_action, 'servants: ',picked_servants)
 
-                    team_dps, round_reward = calc_chain_damage(player_team,picked_cards, round_reward, picked_servants)  
+                    '''
+                    Round specific stuff 
+                    can adjust the np strength just based on game. reset it after... and if it doesn't get used thats fine?
+                    '''
+                    turns_since_round_start+=1 #USED FOR ENEMY NPS
+                    if player_team.hero3.name == 'NeroCaster' and game ==3:
+                        player_team.hero3.NP_damage = 80 #80
+                    if player_team.hero3.name == 'NeroCaster' and game !=3:
+                        player_team.hero3.NP_damage = 80 #15
+
+                    if player_team.hero2.name == 'Ishtar' and game ==2:
+                        player_team.hero2.NP_damage = 50 #80
+                    if player_team.hero2.name == 'Ishtar' and game ==1:
+                        player_team.hero2.NP_damage = 50 #15                       
+                        
+
+                    team_dps, round_reward, np_damage,hero_np_used = calc_chain_damage(player_team,picked_cards, round_reward, picked_servants) 
+
+
                     '''
                     MERLIN ULT
+                    Can actually handle specialish abilities this way?
+                    RESET ROUND STUFF AFTR ADJUSTING IT
                     '''  
                     if player_team.hero1.name == 'Merlin' and player_team.hero1.NP_charge >= 100:
                         apply_buffs(player_team,player_team.hero1.garden_of_avalon())
                         #garden_of_avalon
+                    if player_team.hero3.name == 'NeroCaster' and player_team.hero3.NP_damage != 40:
+                        player_team.hero3.NP_damage = 40
+
+                    if player_team.hero2.name == 'Ishtar' and player_team.hero2.NP_damage != 40:
+                        player_team.hero2.NP_damage = 40
+
                     if self.evaluation == True:
-                        print('team deals ',team_dps,'team hp',player_team.hit_points, ' current np bars: ', player_team.hero1.NP_charge,player_team.hero2.NP_charge,player_team.hero3.NP_charge, player_team.current_stars)
+                        print('total team deals ',team_dps,'np damage',np_damage ,'card damage',team_dps-np_damage,'team hp',player_team.hit_points, ' current np bars: ', player_team.hero1.NP_charge,player_team.hero2.NP_charge,player_team.hero3.NP_charge, player_team.current_stars)
+                        print(hero_np_used)
                         print('enemy deals ',enemy_dps)
+
 
                     player_team.hit_points -= enemy_dps
                     enemy_team.hit_points -= team_dps
@@ -1047,12 +1093,6 @@ class Battle:
                         _, active_skill_dict = get_buff_game_state(player_team, return_dict = True)
                         h1_bonus, h2_bonus, h3_bonus = check_active_buffs_for_rewards(active_skill_dict)
                         
-<<<<<<< Updated upstream
-                        if game == 3: 
-                            round_reward+=1
-                            self.win +=1
-                            hero_rewards = 2
-=======
                         #print(self.game,game,turn_counter, 'HERO1 SKILLS USED IN GAME', player_team.hero_dict['hero1'].used_skill_1, player_team.hero_dict['hero1'].used_skill_2, player_team.hero_dict['hero1'].used_skill_3)
 
                         if game == 3:
@@ -1060,9 +1100,11 @@ class Battle:
                             '''
                             TRYING TO 3 TURN IT
                             '''
-                            if len(hero1_game_state_list) <=5:
+                            if len(hero1_game_state_list) <=self.turn_to_beat:
                                 hero_rewards = 1
-                            if len(hero1_game_state_list) >=5:
+                            elif  len(hero1_game_state_list) <=self.turn_to_beat+.5:
+                                hero_rewards = .25
+                            else: # len(hero1_game_state_list) >=self.turn_to_beat:
                                 hero_rewards = -.25
                             
                             
@@ -1070,7 +1112,6 @@ class Battle:
                             
                             #print(self.game,game,turn_counter,  'HERO1 SKILLS USED IN GAME', player_team.hero_dict['hero1'].used_skill_1, player_team.hero_dict['hero1'].used_skill_2, player_team.hero_dict['hero1'].used_skill_3)
                             #print('')
->>>>>>> Stashed changes
                             if self.evaluation == True:
                                 print('game is a win')
                                 print('#'*60)
@@ -1107,29 +1148,17 @@ class Battle:
                                 for i in range(len(hero1_game_state_list)):
                                     if hero1_game_state_list[i][0] == 1: 
                                         if hero1_action_list[i] == 'pass':
-<<<<<<< Updated upstream
-                                            hero1_rewards_list.append(hero_rewards+1)
-=======
                                             hero1_rewards_list.append(hero_rewards)
->>>>>>> Stashed changes
                                         else:
                                             hero1_rewards_list.append(hero_rewards)
 
                                         if hero2_action_list[i] == 'pass':
-<<<<<<< Updated upstream
-                                            hero2_rewards_list.append(hero_rewards+1)
-=======
                                             hero2_rewards_list.append(hero_rewards)
->>>>>>> Stashed changes
                                         else:
                                             hero2_rewards_list.append(hero_rewards)
 
                                         if hero3_action_list[i] == 'pass':
-<<<<<<< Updated upstream
-                                            hero3_rewards_list.append(hero_rewards+1)
-=======
                                             hero3_rewards_list.append(hero_rewards)
->>>>>>> Stashed changes
                                         else:
                                             hero3_rewards_list.append(hero_rewards)
 
@@ -1137,62 +1166,31 @@ class Battle:
                                         if hero1_action_list[i] == 'pass':
                                             hero1_rewards_list.append(hero_rewards)
                                         else:
-<<<<<<< Updated upstream
-                                            hero1_rewards_list.append(hero_rewards+1)
-=======
                                             hero1_rewards_list.append(hero_rewards)
->>>>>>> Stashed changes
 
                                         if hero2_action_list[i] == 'pass':
                                             hero2_rewards_list.append(hero_rewards)
                                         else:
-<<<<<<< Updated upstream
-                                            hero2_rewards_list.append(hero_rewards+1)
-=======
                                             hero2_rewards_list.append(hero_rewards)
->>>>>>> Stashed changes
 
                                         if hero3_action_list[i] == 'pass':
                                             hero3_rewards_list.append(hero_rewards)
                                         else:
-<<<<<<< Updated upstream
-                                            hero3_rewards_list.append(hero_rewards+1)
-                                    if hero1_game_state_list[i][0] == 3/3: 
-=======
                                             hero3_rewards_list.append(hero_rewards)
                                     if hero1_game_state_list[i][0] == 3: 
->>>>>>> Stashed changes
                                         if hero1_action_list[i] == 'pass':
                                             hero1_rewards_list.append(hero_rewards)
                                         else:
-<<<<<<< Updated upstream
-                                            hero1_rewards_list.append(hero_rewards+1.5)
-=======
                                             hero1_rewards_list.append(hero_rewards)
->>>>>>> Stashed changes
 
                                         if hero2_action_list[i] == 'pass':
                                             hero2_rewards_list.append(hero_rewards)
                                         else:
-<<<<<<< Updated upstream
-                                            hero2_rewards_list.append(hero_rewards+1.5)
-=======
                                             hero2_rewards_list.append(hero_rewards)
->>>>>>> Stashed changes
 
                                         if hero3_action_list[i] == 'pass':
                                             hero3_rewards_list.append(hero_rewards)
                                         else:
-<<<<<<< Updated upstream
-                                            hero3_rewards_list.append(hero_rewards+1.5)
-                                #print(len(hero1_game_state_list))
-                                '''
-                                for i in range(len(hero1_game_state_list)):
-                                    player_team.hero_dict['hero1'].update(hero1_game_state_list[i],hero1_preds_list[i],hero1_predicted_class_list[i],hero1_rewards_list[i])
-                                    player_team.hero_dict['hero2'].update(hero2_game_state_list[i],hero2_preds_list[i],hero2_predicted_class_list[i],hero2_rewards_list[i])
-                                    player_team.hero_dict['hero3'].update(hero3_game_state_list[i],hero3_preds_list[i],hero3_predicted_class_list[i],hero3_rewards_list[i])
-                                '''
-=======
                                             hero3_rewards_list.append(hero_rewards)
 
                                 if 'skill_used' not in hero1_action_list:
@@ -1246,7 +1244,6 @@ class Battle:
                                 #player_team.hero_dict['hero2'].update(hero2_game_state_list,hero2_targets)
                                 #player_team.hero_dict['hero3'].update(hero3_game_state_list,hero3_targets)
                                 
->>>>>>> Stashed changes
                         #player_team.card_picker.update(card_picker_state,round_reward)
 
                         #    player_team.update(current_hand,round_reward)
@@ -1272,14 +1269,9 @@ class Battle:
                             print('preds example hero 3')
                             print(hero3_game_state_list,hero3_preds_list,hero3_predicted_class_list)
                             print('#'*60)
-<<<<<<< Updated upstream
-                        round_reward= -2
-                        hero_rewards = -2
-=======
 
                         round_reward= -1
                         hero_rewards = -1
->>>>>>> Stashed changes
                         if self.evaluation == False:
                             '''
                             hero1_reward += h1_bonus
@@ -1292,10 +1284,7 @@ class Battle:
                                         hero1_rewards_list.append(hero_rewards)
                                     else:
                                         hero1_rewards_list.append(hero_rewards)
-<<<<<<< Updated upstream
-=======
                                         #print(hero_rewards-2)
->>>>>>> Stashed changes
                                     if hero2_action_list[i] == 'pass':
                                         hero2_rewards_list.append(hero_rewards)
                                     else:
@@ -1304,11 +1293,7 @@ class Battle:
                                         hero3_rewards_list.append(hero_rewards)
                                     else:
                                         hero3_rewards_list.append(hero_rewards)
-<<<<<<< Updated upstream
-                                if hero1_game_state_list[i][0] == 2/3: 
-=======
                                 if hero1_game_state_list[i][0] == 2: 
->>>>>>> Stashed changes
                                     if hero1_action_list[i] == 'pass':
                                         hero1_rewards_list.append(hero_rewards)
                                     else:
@@ -1321,11 +1306,7 @@ class Battle:
                                         hero3_rewards_list.append(hero_rewards)
                                     else:
                                         hero3_rewards_list.append(hero_rewards)
-<<<<<<< Updated upstream
-                                if hero1_game_state_list[i][0] == 3/3: 
-=======
                                 if hero1_game_state_list[i][0] == 3: 
->>>>>>> Stashed changes
                                     if hero1_action_list[i] == 'pass':
                                         hero1_rewards_list.append(hero_rewards)
                                     else:
@@ -1339,14 +1320,6 @@ class Battle:
                                     else:
                                         hero3_rewards_list.append(hero_rewards)
 
-<<<<<<< Updated upstream
-                            '''
-                            for i in range(len(hero1_game_state_list)):
-                                player_team.hero_dict['hero1'].update(hero1_game_state_list[i],hero1_preds_list[i],hero1_predicted_class_list[i],hero1_rewards_list[i])
-                                player_team.hero_dict['hero2'].update(hero2_game_state_list[i],hero2_preds_list[i],hero2_predicted_class_list[i],hero2_rewards_list[i])
-                                player_team.hero_dict['hero3'].update(hero3_game_state_list[i],hero3_preds_list[i],hero3_predicted_class_list[i],hero3_rewards_list[i])
-                            '''
-=======
                             if hero1_action_list[0] == 'skill_used' and hero1_action_list[1] == 'skill_used' and hero1_action_list[2] == 'skill_used':
                                     hero1_rewards_list[0] = -1
                                     hero1_rewards_list[1] = -1
@@ -1402,7 +1375,6 @@ class Battle:
                             #player_team.hero_dict['hero3'].update(hero3_game_state_list,hero3_targets)
                                     
                             
->>>>>>> Stashed changes
                             #player_team.hero_dict['hero1'].update(hero1_state,hero1_reward)
                             #player_team.hero_dict['hero2'].update(hero2_state,hero2_reward)
                             #player_team.hero_dict['hero3'].update(hero3_state,hero3_reward)
@@ -1411,12 +1383,12 @@ class Battle:
                         break
                     
                     #if self.evaluation == False:
-                        '''
+                        
                         #print(hero2_reward,hero2_action)
-                        player_team.hero_dict['hero1'].update(hero1_state,hero1_reward)
-                        player_team.hero_dict['hero2'].update(hero2_state,hero2_reward)
-                        player_team.hero_dict['hero3'].update(hero3_state,hero3_reward)
-                        '''
+                        #player_team.hero_dict['hero1'].update(hero1_state,hero1_reward)
+                        #player_team.hero_dict['hero2'].update(hero2_state,hero2_reward)
+                        #player_team.hero_dict['hero3'].update(hero3_state,hero3_reward)
+                        
                         #player_team.card_picker.update(card_picker_state,round_reward)
 
                     
@@ -1432,7 +1404,7 @@ class Battle:
         team.hit_points = self.og_hitpoints
         team.hero1.NP_charge = 80
         team.hero2.NP_charge = 50
-        team.hero3.NP_charge = 80
+        team.hero3.NP_charge = 50
         # reset skill usage:
         team.hero1.used_skill_1 = 0
         team.hero1.used_skill_2 = 0
@@ -1457,13 +1429,6 @@ class Battle:
     def report(self,player_team):
         #turned off for plotting 9/18
         if self.game % 1000 == 0:
-<<<<<<< Updated upstream
-
-            self.game_count_list.append(str(self.game))
-            self.result_list.append(str(self.win / (self.win + self.loss)))
-            df = pd.DataFrame(list(zip(self.game_count_list, self.result_list)), columns =['game_number', 'win_loss'])
-            df.to_csv('{}/run_record.csv'.format(save_dir))
-=======
             self.win_len_full.append(sum(self.game_len_list)/len(self.game_len_list))
             self.game_count_list.append(str(self.game))
             self.result_list.append(str(self.win / (self.win + self.loss)))
@@ -1476,6 +1441,9 @@ class Battle:
                                        self.win_len_full)),
                             columns =['game_number', 'win_loss','exploration','learning_rate','avg_win_len'])
             df.to_csv('{}/{}/run_record.csv'.format('fgo_environment',save_dir))
+            
+
+            self.turn_to_beat = sum(self.game_len_list)/len(self.game_len_list)
             self.game_len_list = [] #reset the game len list
 
         if self.game % 10 == 0:
@@ -1515,7 +1483,6 @@ class Battle:
             self.hero2_game_target_holder_multi_game = []
             self.hero3_game_target_holder_multi_game = []
             #print('FINISHED UPDATING MODELS')
->>>>>>> Stashed changes
 
         if self.game % self._num_learning_rounds == 0:
             print('##############################################')
@@ -1532,7 +1499,7 @@ class Battle:
             player_team.hero1._epsilon = 1.0
             player_team.hero2._epsilon = 1.0
             player_team.hero3._epsilon = 1.0
-            #player_team.card_picker._epsilon = 1.0
+            player_team.card_picker._epsilon = 1.0
             print('#################### G1 ######################')
             self.fight_battle()
             print('#################### G2 ######################')
@@ -1542,9 +1509,9 @@ class Battle:
             # addition that decreases the amount of exploration over time
             # after 150K outfits the rate of exploration gets decreased
             # by .1 every time this eval process is done
-            if self.game > 5000:
+            if self.game > 20000:
                 if exploration_holder < .9:
-                    exploration_holder += .3
+                    exploration_holder += .2
                 if exploration_holder >= .9:
                     exploration_holder = .9
 
@@ -1552,27 +1519,16 @@ class Battle:
             player_team.hero1._epsilon = exploration_holder
             player_team.hero2._epsilon = exploration_holder
             player_team.hero3._epsilon = exploration_holder
-<<<<<<< Updated upstream
-            #player_team.card_picker._epsilon = .9
-=======
             player_team.card_picker._epsilon = 1.0
->>>>>>> Stashed changes
 
             self.evaluation = False
             
             self.win = 0
             self.loss = 0
-<<<<<<< Updated upstream
-            #player_team.card_picker.save_rl_model('{}/{}_iteration_{}'.format(save_dir,rl_model_name,self.game))
-            player_team.hero1.save_rl_model('{}/{}_iteration_{}'.format(save_dir,player_team.hero1.name,self.game))
-            player_team.hero2.save_rl_model('{}/{}_iteration_{}'.format(save_dir,player_team.hero1.name,self.game))
-            player_team.hero3.save_rl_model('{}/{}_iteration_{}'.format(save_dir,player_team.hero1.name,self.game))
-=======
             player_team.card_picker.save_rl_model('{}/{}/{}_iteration_{}'.format('fgo_environment',save_dir,rl_model_name,self.game))
             player_team.hero1.save_rl_model('{}/{}/{}_iteration_{}'.format('fgo_environment',save_dir,player_team.hero1.name,self.game))
             player_team.hero2.save_rl_model('{}/{}/{}_iteration_{}'.format('fgo_environment',save_dir,player_team.hero2.name,self.game))
             player_team.hero3.save_rl_model('{}/{}/{}_iteration_{}'.format('fgo_environment',save_dir,player_team.hero3.name,self.game))
->>>>>>> Stashed changes
 
             
             #self.player.save_rl_model('models/{}_iteration_{}'.format(rl_model_name,self.game))
@@ -1593,7 +1549,7 @@ class Battle:
             player_team.hero1._epsilon = 1.0
             player_team.hero2._epsilon = 1.0
             player_team.hero3._epsilon = 1.0
-            #player_team.card_picker._epsilon = 1.0
+            player_team.card_picker._epsilon = 1.0
             print('#################### G1 ######################')
             self.fight_battle()
             print('#################### G2 ######################')
@@ -1607,6 +1563,7 @@ class Battle:
             print(str(self.game) +","  +str(self.win / (self.win + self.loss)))
             print('lr holder',self.lr_holder)
             print('')
+            
             print('##############################################')
             # addition that decreases the amount of exploration over time
             # after 150K outfits the rate of exploration gets decreased
@@ -1614,21 +1571,14 @@ class Battle:
             
             if self.game >= 20000:
                 if exploration_holder < .9:
-<<<<<<< Updated upstream
-                    exploration_holder += .3
-                if exploration_holder >= .9:
-                    exploration_holder = .9
-                self.lr_holder = self.lr_holder *.1
-=======
                     exploration_holder += .2
                 if exploration_holder >= .9:
                     exploration_holder = .9
                 lr_holder = self.lr_holder *.8
-                if lr_holder < .00001:
-                    self.lr_holder = .0001
+                if lr_holder < .0001:
+                    self.lr_holder = .001
                 else:
                      self.lr_holder = lr_holder
->>>>>>> Stashed changes
                 k.set_value(player_team.hero1._model.optimizer.lr, self.lr_holder)
                 k.set_value(player_team.hero2._model.optimizer.lr, self.lr_holder)
                 k.set_value(player_team.hero3._model.optimizer.lr, self.lr_holder)
@@ -1636,13 +1586,9 @@ class Battle:
             player_team.hero1._epsilon = exploration_holder
             player_team.hero2._epsilon = exploration_holder
             player_team.hero3._epsilon = exploration_holder
-<<<<<<< Updated upstream
-            #player_team.card_picker._epsilon = .9
-=======
             print('team ep',player_team._epsilon)
             print('hero1 ep',player_team.hero1._epsilon)
             player_team.card_picker._epsilon = 1.0
->>>>>>> Stashed changes
 
             self.evaluation = False
             
@@ -1650,14 +1596,7 @@ class Battle:
             self.loss = 0
 
             if self.game % 1000 == 0:
-<<<<<<< Updated upstream
-                #player_team.card_picker.save_rl_model('{}/{}_iteration_{}'.format(save_dir,rl_model_name,self.game))
-                player_team.hero1.save_rl_model('{}/{}_iteration_{}'.format(save_dir,player_team.hero1.name,self.game))
-                player_team.hero2.save_rl_model('{}/{}_iteration_{}'.format(save_dir,player_team.hero2.name,self.game))
-                player_team.hero3.save_rl_model('{}/{}_iteration_{}'.format(save_dir,player_team.hero3.name,self.game))
-=======
                 player_team.card_picker.save_rl_model('{}/{}/{}_iteration_{}'.format('fgo_environment',save_dir,rl_model_name,self.game))
                 player_team.hero1.save_rl_model('{}/{}/{}_iteration_{}'.format('fgo_environment',save_dir,player_team.hero1.name,self.game))
                 player_team.hero2.save_rl_model('{}/{}/{}_iteration_{}'.format('fgo_environment',save_dir,player_team.hero2.name,self.game))
                 player_team.hero3.save_rl_model('{}/{}/{}_iteration_{}'.format('fgo_environment',save_dir,player_team.hero3.name,self.game))
->>>>>>> Stashed changes
