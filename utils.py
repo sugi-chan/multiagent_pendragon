@@ -36,11 +36,181 @@ loader = transforms.Compose([transforms.Resize((imsize,imsize)),
 	transforms.ToTensor(),
 	transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
 
-#for brave chain
 scale=transforms.Compose([transforms.Resize((224,224)),
 							transforms.ToTensor()
 							 ])
 
+import copy
+from pathlib import Path
+
+import torch
+import torch.nn as nn
+from torchvision import models as torch_models
+
+class _Identity(nn.Module):
+    """
+    Used to pass penultimate layer features to the the ensemble
+
+    Motivation for this is that the features from the penultimate layer
+    are likely more informative than the 1000 way softmax that was used
+    in the multi_output_model_v2.
+    """
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return x
+
+
+class ResnetForMultiTaskClassification(nn.Module):
+    """
+    Pytorch image attribute model. This model allows you to load
+    in some pretrained tasks in addition to creating new ones.
+
+    Examples
+    --------
+    To instantiate a completely new instance of ResnetForMultiTaskClassification
+    and load the weights into this architecture you can set `pretrained` to True
+
+    ```
+        model = ResnetForMultiTaskClassification(
+            new_task_dict=new_task_dict,
+            load_pretrained_resnet = True
+        )
+
+        DO SOME TRAINING
+
+        model.save(SOME_FOLDER, SOME_MODEL_ID)
+    ```
+
+    To instantiate an instance of ResnetForMultiTaskClassification that has layers for
+    pretrained tasks and new tasks, you would do the following:
+    ```
+        model = ResnetForMultiTaskClassification(
+            pretrained_task_dict=pretrained_task_dict,
+            new_task_dict=new_task_dict
+        )
+
+        model.load(SOME_FOLDER, SOME_MODEL_DICT)
+
+        DO SOME TRAINING
+    ```
+
+    Parameters
+    ----------
+    pretrained_task_dict: dict
+        dictionary mapping each pretrained task to the number of labels it has
+    new_task_dict: dict
+        dictionary mapping each new task to the number of labels it has
+    load_pretrained_resnet: boolean
+        flag for whether or not to load in pretrained weights for ResNet50.
+        useful for the first round of training before there are fine tuned weights
+    """
+
+    def __init__(self, pretrained_task_dict=None, new_task_dict=None, load_pretrained_resnet=False):
+        super(ResnetForMultiTaskClassification, self).__init__()
+
+        self.resnet = torch_models.resnet50(pretrained=load_pretrained_resnet)
+        self.resnet.fc = _Identity()
+
+        if pretrained_task_dict is not None:
+            pretrained_layers = {}
+            for key, task_size in pretrained_task_dict.items():
+                pretrained_layers[key] = nn.Linear(2048, task_size)
+            self.pretrained_classifiers = nn.ModuleDict(pretrained_layers)
+        if new_task_dict is not None:
+            new_layers = {}
+            for key, task_size in new_task_dict.items():
+                new_layers[key] = nn.Linear(2048, task_size)
+            self.new_classifiers = nn.ModuleDict(new_layers)
+
+    def forward(self, x):
+        """
+        Defines forward pass for image model
+
+        Parameters
+        ----------
+        x: dict of image tensors containing tensors for
+        full and cropped images. the full image tensor
+        has the key 'full_img' and the cropped tensor has
+        the key 'crop_img'
+
+        Returns
+        ----------
+        A dictionary mapping each task to its logits
+        """
+        full_img = self.resnet(x)
+
+        #full_crop_combined = torch.cat((full_img, crop_img), 1)
+
+        #dense_layer_output = self.dense_layers(full_crop_combined)
+
+        logit_dict = {}
+        if hasattr(self, 'pretrained_classifiers'):
+            for key, classifier in self.pretrained_classifiers.items():
+                logit_dict[key] = classifier(full_img)
+        if hasattr(self, 'new_classifiers'):
+            for key, classifier in self.new_classifiers.items():
+                logit_dict[key] = classifier(full_img)
+
+        return logit_dict
+
+    def freeze_core(self):
+        """Freeze all core model layers"""
+        for param in self.resnet.parameters():
+            param.requires_grad = Fals
+
+    def freeze_all_pretrained(self):
+        """Freeze pretrained classifier layers and core model layers"""
+        self.freeze_core()
+        if hasattr(self, 'pretrained_classifiers'):
+            for param in self.pretrained_classifiers.parameters():
+                param.requires_grad = False
+        else:
+            print('There are no pretrained_classifier layers to be frozen.')
+
+    def unfreeze_pretrained_classifiers(self):
+        """Unfreeze pretrained classifier layers"""
+        if hasattr(self, 'pretrained_classifiers'):
+            for param in self.pretrained_classifiers.parameters():
+                param.requires_grad = True
+        else:
+            print('There are no pretrained_classifier layers to be unfrozen.')
+
+    def unfreeze_pretrained_classifiers_and_core(self):
+        """Unfreeze pretrained classifiers and core model layers"""
+        for param in self.resnet.parameters():
+            param.requires_grad = True
+        self.unfreeze_pretrained_classifiers()
+
+pretrained_task_dict = {
+    'attack': 2,
+    'cards': 3,
+    'turncounter': 3,
+}
+MT_RESNET50 = ResnetForMultiTaskClassification(pretrained_task_dict=pretrained_task_dict,
+    load_pretrained_resnet=False)
+MT_RESNET50.load_state_dict(torch.load("models/multi_task_resnet_fgo_model1.pth"))
+MT_RESNET50 = MT_RESNET50.to(device)
+MT_RESNET50.eval()
+
+softmax = nn.Softmax(1)
+
+
+def get_preds(image,category):
+    if category == 'attack':
+        labels = { 0:'attack', 1:'not_attack'}
+    if category == 'cards':
+        labels = { 0:'arts', 1:'buster',2:'quick'}
+    if category == 'turncounter':
+        labels = {0:'one', 1:'three',2: 'two'}
+    full_preds = MT_RESNET50(image)
+    preds_out = softmax(full_preds[category])
+    label_out = labels[preds_out.cpu().data.numpy().argmax()]
+    
+    return label_out
+
+'''
 CARD_RESNET = models.resnet50(pretrained=False)
 num_ftrs = CARD_RESNET.fc.in_features
 CARD_RESNET.fc = nn.Linear(num_ftrs, 3)
@@ -62,30 +232,39 @@ TURN_RESNET.fc = nn.Linear(num_ftrs, 3)
 TURN_RESNET = TURN_RESNET.to(device)
 TURN_RESNET.load_state_dict(torch.load('models/turncounter_resnet50.pth'))
 TURN_RESNET = TURN_RESNET.eval()
+'''
 ## each of the card slots should be in a lookup
+'''
+card1 = 60 502    272 777
+card2 = 385 502    599 777
+card3 = 706 502    921 777
+card4 = 1032 502    1265 777
+card5 = 1357 502    1573 777
+[502:777, 60:272]
+'''
 def get_card_raw(card_slot, raw_image):
 	if card_slot == 1:
-		sliced = raw_image[205:310, 27:109]
+		sliced = raw_image[502:777, 60:272]
 		#cv2.imshow("cropped", sliced)
 		#cv2.waitKey(0)
 
 	elif card_slot == 2:
-		sliced = raw_image[205:310, 156:240]
+		sliced = raw_image[502:777, 385:599]
 		#cv2.imshow("cropped", sliced)
 		#cv2.waitKey(0)
 
 	elif card_slot == 3:
-		sliced = raw_image[205:310, 287:370]
+		sliced = raw_image[502:777, 706:921]
 		#cv2.imshow("cropped", sliced)
 		#cv2.waitKey(0)
 
 	elif card_slot == 4:
-		sliced = raw_image[205:310, 415:500]
+		sliced = raw_image[502:777, 1032:1265]
 		#cv2.imshow("cropped", sliced)
 		#cv2.waitKey(0)
 
 	elif card_slot == 5:
-		sliced = raw_image[205:310, 545:634]
+		sliced = raw_image[502:777, 1357:1573]
 		#cv2.imshow("cropped", sliced)
 		#cv2.waitKey(0)
 
@@ -110,14 +289,11 @@ def image_loader(image_name):
 
 
 def get_predicted_class(image_array):
-	labels = { 0:'arts', 1:'buster',2:'quick'}
-	#load model architecture
-	
-
 	image = image_loader(image_array)
-	y_pred = CARD_RESNET(image)
-	label_out = labels[y_pred.cpu().data.numpy().argmax()]
-	return label_out, y_pred
+	
+	label_out = get_preds(image,'cards')
+	#label_out = labels[y_pred.cpu().data.numpy().argmax()]
+	return label_out
 
 
 def click_location(loc_name):
@@ -125,37 +301,37 @@ def click_location(loc_name):
 	sleep_time_ = .01
 	if loc_name == 'NP1':
 		time.sleep(sleep_time_)
-		pyautogui.moveTo(998,492)
+		pyautogui.moveTo(637,343)
 		pyautogui.click()
 	if loc_name == 'NP2':
 		time.sleep(sleep_time_)
-		pyautogui.moveTo(1105,492)
+		pyautogui.moveTo(949,343)
 		pyautogui.click()
 	if loc_name == 'NP3':
 		time.sleep(sleep_time_)
-		pyautogui.moveTo(1220,492)
+		pyautogui.moveTo(1275,343)
 		pyautogui.click()
 
 
 	if loc_name == 'c1':
 		time.sleep(sleep_time_)
-		pyautogui.moveTo(844, 642)
+		pyautogui.moveTo(323, 720)
 		pyautogui.click()
 	if loc_name == 'c2':
 		time.sleep(sleep_time_)
-		pyautogui.moveTo(978, 642)
+		pyautogui.moveTo(647, 720)
 		pyautogui.click()
 	if loc_name == 'c3':
 		time.sleep(sleep_time_)
-		pyautogui.moveTo(1108, 642)
+		pyautogui.moveTo(973, 720)
 		pyautogui.click()
 	if loc_name == 'c4':
 		time.sleep(sleep_time_)
-		pyautogui.moveTo(1235, 642)
+		pyautogui.moveTo(1306, 720)
 		pyautogui.click()
 	if loc_name == 'c5':
 		time.sleep(sleep_time_)
-		pyautogui.moveTo(1367, 642)
+		pyautogui.moveTo(1629, 720)
 		pyautogui.click()
 
 def check_for_chain(card_type,card_list):
@@ -189,7 +365,7 @@ def brave_chain_checker(base_card,raw_card_list):
 def grab_screen_fgo():
 	#goes through picking cards for brave, buster, arts, quick chains
 
-	screen = grab_screen(region=(717,379,1486,742)) #need to make this easier 
+	screen = grab_screen(region=(159,89,1774,993)) #need to make this easier 
 	screen = cv2.cvtColor(screen, cv2.COLOR_BGR2RGB)
 	return screen
 
@@ -202,7 +378,7 @@ def get_cards(screen):
 		#for brave lists
 		brave_cards = PIL.Image.fromarray(raw_card)
 		brave_chain_raw_img_list.append(brave_cards)
-		pred_class ,raw_pred= get_predicted_class(raw_card)
+		pred_class = get_predicted_class(raw_card)
 		card_list.append(pred_class)
 		#print(card_list)
 	return card_list, brave_chain_raw_img_list
@@ -310,36 +486,24 @@ def rl_bot_card_choice(card_list):
 	
 
 def detect_start_turn():
-	#630, 327 xy 730 415
 
-	
-
-	labels = { 0:'attack', 1:'not_attack'}
 	screen = grab_screen_fgo()
 
-	attack_button = screen[261:349, 582:687] #x1,y1 x2,y2
+	attack_button = screen[650:860, 1320:1560] #x1,y1 x2,y2
 	attack_button = cv2.cvtColor(attack_button, cv2.COLOR_BGR2RGB)
 
 	image = image_loader(attack_button)
-	y_pred = ATTACK_MODEL(image)
-
-	label_out = labels[y_pred.cpu().data.numpy().argmax()]
+	label_out = get_preds(image,'attack')
 
 	return label_out == 'attack'
 
 def detect_round_counter():
-	labels = {0:'one', 1:'three',2: 'two'}
-
-	
-
 
 	screen = grab_screen_fgo()
-	sliced = image_loader(screen[6:22, 495:506]) #x1 = 1210 y1 = 383 x2 = 1224 y2= 398
+	sliced = image_loader(screen[10:44, 1083:1112]) #x1 = 1210 y1 = 383 x2 = 1224 y2= 398
 
-	y_pred = TURN_RESNET(sliced)
-	label_out = labels[y_pred.cpu().data.numpy().argmax()]
+	label_out = get_preds(sliced,'turncounter')
 
-	#del turn_resnet
 	
 	return label_out
 

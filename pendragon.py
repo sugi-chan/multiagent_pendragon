@@ -1,3 +1,20 @@
+# extra imports to set GPU options
+import tensorflow as tf
+from keras import backend as k
+ 
+###################################
+# TensorFlow wizardry
+config = tf.ConfigProto()
+ 
+# Don't pre-allocate memory; allocate as-needed
+config.gpu_options.allow_growth = True
+ 
+# Only allow a total of half the GPU memory to be allocated
+config.gpu_options.per_process_gpu_memory_fraction = 0.2
+ 
+# Create a session with the above options specified.
+k.tensorflow_backend.set_session(tf.Session(config=config))
+
 import numpy as np
 from grab_screen import grab_screen
 import cv2
@@ -17,6 +34,8 @@ import PIL
 import torch.nn.functional as F
 import pyautogui
 import pandas as pd
+from keras.models import load_model
+
 
 from utils import get_card_raw, image_loader, get_predicted_class
 from utils import click_location,check_for_chain,brave_chain_checker 
@@ -27,14 +46,78 @@ from fgo_environment.utils import convert_card_list
 import argparse
 
 
-from fgo_environment.heroic_spirt import Chaldea
+from fgo_environment.heroic_spirt import Chaldea, JAlter, Ishtar, ArtoriaSaber, Merlin, NeroCaster
 from fgo_environment.colosseum import apply_buffs, get_buff_game_state, get_skill_use_game_state,increment_turns_for_buffs_gather_mods
 
 #get_buff_game_state(TEAM)+get_skill_use_game_state(TEAM)
-TEAM = Chaldea() #loads models
+hero_list = [JAlter(health=10,NP=50,spot='hero1',_epsilon=1),
+Ishtar(health=10,NP=50,spot='hero2',_epsilon=1),
+ArtoriaSaber(health=10,NP=50,spot='hero3',_epsilon=1)]
+
+'''
+Fast team
+'''
+hero_list = [Merlin(health=10,NP=50,spot='hero1',_epsilon=1),
+Ishtar(health=10,NP=50,spot='hero2',_epsilon=1),
+ArtoriaSaber(health=10,NP=50,spot='hero3',_epsilon=1)]
+
+'''
+Salem
+'''
+hero_list = [Merlin(health=10,NP=50,spot='hero1',_epsilon=1),
+Ishtar(health=10,NP=50,spot='hero2',_epsilon=1),
+NeroCaster(health=10,NP=50,spot='hero3',_epsilon=1)]
+
+TEAM = Chaldea(hero_list = hero_list) #loads models
+print('')
+print(TEAM._epsilon)
+print(TEAM.hero1.name,TEAM.hero2.name,TEAM.hero3.name)
+print(TEAM.hero1._epsilon)
+print(TEAM.hero1.action_dict)
+print('')
+'''
+Salem execution hill Pure policy runs
+'''
+TEAM.hero1._model = load_model('D:/projects/multiagent_pendragon_merlin/fgo_environment/models/M_I_NC_turns_on_wave/Merlin_iteration_70000.h5')
+TEAM.hero2._model = load_model('D:/projects/multiagent_pendragon_merlin/fgo_environment/models/M_I_NC_turns_on_wave/Ishtar_iteration_70000.h5')
+TEAM.hero3._model = load_model('D:/projects/multiagent_pendragon_merlin/fgo_environment/models/M_I_NC_turns_on_wave/NeroCaster_iteration_70000.h5')
+
+
+'''
+Salem execution hill Pure policy runs BENCHMARKED 9 average
+
+TEAM.hero1._model = load_model('D:/projects/multiagent_pendragon_merlin/fgo_environment/models/M_I_NC_1_28_pure_policy_enemy_attacks/Merlin_iteration_90000.h5')
+TEAM.hero2._model = load_model('D:/projects/multiagent_pendragon_merlin/fgo_environment/models/M_I_NC_1_28_pure_policy_enemy_attacks/Ishtar_iteration_90000.h5')
+TEAM.hero3._model = load_model('D:/projects/multiagent_pendragon_merlin/fgo_environment/models/M_I_NC_1_28_pure_policy_enemy_attacks/NeroCaster_iteration_90000.h5')
+'''
+
+#TEAM.hero1._model = load_model('D:/projects/multiagent_pendragon_dev_2/fgo_environment/models/pure_policy_larger_models/jalter_iteration_500000.h5')
+#TEAM.hero2._model = load_model('D:/projects/multiagent_pendragon_dev_2/fgo_environment/models/pure_policy_larger_models/Ishtar_iteration_500000.h5')
+#TEAM.hero3._model = load_model('D:/projects/multiagent_pendragon_dev_2/fgo_environment/models/pure_policy_larger_models/artoria_pendragon_iteration_500000.h5')
+'''
+Fast team
+
+TEAM.hero1._model = load_model('D:/projects/multiagent_pendragon_merlin/fgo_environment/models/merlin_4_turning/Merlin_iteration_30000.h5')
+TEAM.hero2._model = load_model('D:/projects/multiagent_pendragon_merlin/fgo_environment/models/merlin_4_turning/Ishtar_iteration_30000.h5')
+TEAM.hero3._model = load_model('D:/projects/multiagent_pendragon_merlin/fgo_environment/models/merlin_4_turning/artoria_pendragon_iteration_30000.h5')
+'''
+
+'''
+Salem execution hill
+
+TEAM.hero1._model = load_model('D:/projects/multiagent_pendragon_merlin/fgo_environment/models/merlin_ishtar_nero_execution_1_26/Merlin_iteration_250000.h5')
+TEAM.hero2._model = load_model('D:/projects/multiagent_pendragon_merlin/fgo_environment/models/merlin_ishtar_nero_execution_1_26/Ishtar_iteration_250000.h5')
+TEAM.hero3._model = load_model('D:/projects/multiagent_pendragon_merlin/fgo_environment/models/merlin_ishtar_nero_execution_1_26/NeroCaster_iteration_250000.h5')
+'''
+
+
 def main(skill_usage_list):
     skill_usage_num = 0
     turn_counter = 0
+
+    turns_on_wave = 0
+    prev_wave = 0
+    curr_wave = 0
     # np_barrage determies if 
     # the bot will try to use all the NPs every turn
     # most of the time it will use it after it has finished
@@ -63,14 +146,28 @@ def main(skill_usage_list):
                 round_number_list = []
                 for i in range(3):
                     round_number_list.append(detect_round_counter())
-
+                #print('checking_turn_number',round_number_list)
                 round_number = max(set(round_number_list), key=round_number_list.count)
                 if round_number == 'one':
                     round_int = 1
+                    if prev_wave ==0 and curr_wave == 0:
+                        turns_on_wave += 1
                 if round_number == 'two':
                     round_int = 2
+                    if prev_wave == 0 and curr_wave ==0:
+                        prev_wave = 1
+                        curr_wave = 2
+                        turns_on_wave = 0
+                    if prev_wave == 1 and curr_wave == 2:
+                        turns_on_wave += 1
                 if round_number == 'three':
                     round_int = 3
+                    if prev_wave == 1 and curr_wave == 2:
+                        prev_wave = 2
+                        curr_wave = 3
+                        turns_on_wave = 0
+                    if prev_wave == 2 and curr_wave == 3:
+                        turns_on_wave += 1
                 print(round_number,round_number_list)
                 turn_counter+=1 #still tracking turn counter based on detecting the attack button
 
@@ -78,8 +175,10 @@ def main(skill_usage_list):
                 get agents values or something 
                 '''
                 skill_list1 = [] #get this from skill sheets but can populate them here         
-                hero1_state = [round_int/3]+[turn_counter/15]+get_buff_game_state(TEAM)+get_skill_use_game_state(TEAM)
-
+                #hero1_state = [round_int/3]+[turn_counter/15]+get_buff_game_state(TEAM)+get_skill_use_game_state(TEAM)
+                #hero1_state = [round_int]+[turn_counter]+get_skill_use_game_state(TEAM)
+                #hero1_state = [round_int]+get_skill_use_game_state(TEAM)
+                hero1_state = [round_int]+[turns_on_wave]+get_skill_use_game_state(TEAM)
                 hero1_action, hero1_pred_class, hero1_preds = TEAM.hero_dict['hero1'].get_action(hero1_state)
                 
                 print('hero1 action: ',hero1_action[0])
@@ -88,13 +187,30 @@ def main(skill_usage_list):
                     if hero1_action[0] == 'sk1':
                         TEAM.hero_dict['hero1'].used_skill_1 = 1
                         skill_list1.append('s1s1')
+
                     elif hero1_action[0] == 'sk2':
                         TEAM.hero_dict['hero1'].used_skill_2 = 1
                         skill_list1.append('s1s2')
                     elif hero1_action[0] == 'sk3':
                         TEAM.hero_dict['hero1'].used_skill_3 = 1
                         skill_list1.append('s1s3')
-                hero2_state = [round_int/3]+[turn_counter/15]+get_buff_game_state(TEAM)+get_skill_use_game_state(TEAM)
+
+                    elif hero1_action[0] == 'sk3_a':
+                        TEAM.hero_dict['hero1'].used_skill_3 = 1
+                        skill_list1.append('s1s3')
+                        skill_list1.append('tt1')
+                    elif hero1_action[0] == 'sk3_b':
+                        TEAM.hero_dict['hero1'].used_skill_3 = 1
+                        skill_list1.append('s1s3')
+                        skill_list1.append('tt2')
+                    elif hero1_action[0] == 'sk3_c':
+                        TEAM.hero_dict['hero1'].used_skill_3 = 1
+                        skill_list1.append('s1s3')
+                        skill_list1.append('tt3')
+                #hero2_state = [round_int/3]+[turn_counter/15]+get_buff_game_state(TEAM)+get_skill_use_game_state(TEAM)
+                #hero2_state = [round_int]+[turn_counter]+get_skill_use_game_state(TEAM)
+                #hero2_state = [round_int]+get_skill_use_game_state(TEAM)
+                hero2_state = [round_int]+[turns_on_wave]+get_skill_use_game_state(TEAM)
                 hero2_action, hero2_pred_class, hero2_preds = TEAM.hero_dict['hero2'].get_action(hero2_state)
 
                 print('hero2 action: ',hero2_action[0])
@@ -110,7 +226,10 @@ def main(skill_usage_list):
                         TEAM.hero_dict['hero2'].used_skill_3 = 1
                         skill_list1.append('s2s3')
 
-                hero3_state = [round_int/3]+[turn_counter/15]+get_buff_game_state(TEAM)+get_skill_use_game_state(TEAM)
+                #hero3_state = [round_int/3]+[turn_counter/15]+get_buff_game_state(TEAM)+get_skill_use_game_state(TEAM)
+                #hero3_state = [round_int]+[turn_counter]+get_skill_use_game_state(TEAM)
+                #hero3_state = [round_int]+get_skill_use_game_state(TEAM)
+                hero3_state = [round_int]+[turns_on_wave]+get_skill_use_game_state(TEAM)
                 hero3_action, hero3_pred_class, hero3_preds = TEAM.hero_dict['hero3'].get_action(hero3_state)
                 print('hero3 action: ',hero3_action[0])
                 if hero3_action[0] != 'pass':
@@ -123,7 +242,10 @@ def main(skill_usage_list):
                         skill_list1.append('s3s2')
                     elif hero3_action[0] == 'sk3':
                         TEAM.hero_dict['hero3'].used_skill_3 = 1
+
                         skill_list1.append('s3s3')
+                        skill_list1.append('tt3')
+
 
                 if len(skill_list1) >0:
                     skill_list1.append('attack_2')
@@ -139,7 +261,7 @@ def main(skill_usage_list):
                         pyautogui.click()
                         time.sleep(sleep_seconds)
                     skill_usage_num+=1
-                    if round_int > 1:
+                    if round_int > 0 or turn_counter >7:
                         click_location("NP2")
                         click_location("NP3")
                         click_location("NP1")
@@ -152,7 +274,7 @@ def main(skill_usage_list):
                     time.sleep(2.0)
 
                     if np_barrage is True:
-                        if round_int > 1:
+                        if round_int > 0 or turn_counter >7:
                             click_location("NP2")
                             click_location("NP3")
                             click_location("NP1")
@@ -164,7 +286,7 @@ def main(skill_usage_list):
                 screen = grab_screen_fgo()
                 card_list, brave_chain_raw_img_list = get_cards(screen)
                 converted_cards = convert_card_list(card_list)
-                card_picker_state = converted_cards+get_buff_game_state(TEAM)
+                card_picker_state = converted_cards#+get_buff_game_state(TEAM)
                 
                 #brave_chain_bool = False
                 #if brave_chain_bool == True:

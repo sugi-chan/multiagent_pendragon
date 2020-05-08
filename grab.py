@@ -100,8 +100,22 @@ def main(file_name, starting_value):
                 time.sleep(1)
 '''
 time.sleep(4)
-screen = grab_screen(region=(717,379,1486,742)) #order is y1 y2, x1:x2#x1,y1 x2,y2
-#screen = screen[582:261, 687:349]
+#screen = grab_screen(region=(717,379,1486,742)) #order is y1 y2, x1:x2#x1,y1 x2,y2 
+'''
+samsung sync full screen x1 159 y1 89 x2 1774 y 993
+attack button = 1320x650  1560 860
+turn = 1083 10  xy  1112 44
+card1 = 60 502    272 777
+card2 = 385 502    599 777
+card3 = 706 502    921 777
+card4 = 1032 502    1265 777
+card5 = 1357 502    1573 777
+'''
+screen = grab_screen(region=(159,89,1774,993))
+#screen = screen[650:860, 1320:1560] #attack
+#screen = screen[10:44, 1083:1112] #round
+screen = screen[502:777, 60:272] #card
+
 #screen = grab_screen(region=(582:261, 687:349)) #x1,y1 x2,y2
 #screen = screen[6:22, 495:506] #x1 = 495 y1 = 8 x2 = 506 y2= 20
 #screen = grab_screen()
@@ -111,7 +125,7 @@ screen = grab_screen(region=(717,379,1486,742)) #order is y1 y2, x1:x2#x1,y1 x2,
 screen = cv2.cvtColor(screen, cv2.COLOR_BGR2RGB)
 #screen = cv2.cvtColor(screen, cv2.COLOR_BGR2RGB)
 print(type(screen))
-cv2.imwrite('attack_testing_attack.png', screen)
+cv2.imwrite('cards.png', screen)
 print('captured')
 cv2.imshow('dst_rt', screen)
 
